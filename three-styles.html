@@ -1,0 +1,380 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>同一件事，三種說法</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;700&display=swap">
+<style>
+/* Layout: fixed 1280×720 stage scaled to fit; scenario bar on top, three styles side by side, byte-size chart along the bottom */
+:root{
+  --bg:#E9EDF2; --surface:#FFFFFF; --sunken:#F3F5F8; --ink:#14202C; --muted:#5A6776; --line:#D0D8E1;
+  --rest:#2360C4; --rpc:#7A3BB0; --grpc:#0E7C86;
+  --mark:#FFE58A; --mark-ink:#14202C;
+  --j-key:#7338A8; --j-str:#12835A; --j-num:#AD6B05; --j-lit:#2360C4;
+  --sans:"IBM Plex Sans","Noto Sans TC",system-ui,-apple-system,"PingFang TC","Microsoft JhengHei",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,"Noto Sans TC",monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0F141A; --surface:#171E27; --sunken:#121820; --ink:#E4EAF1; --muted:#93A0AE; --line:#2A3440;
+  --rest:#6D9BF0; --rpc:#BE8DF0; --grpc:#3FC2C9;
+  --mark:#5C4A0E; --mark-ink:#FFE9A8;
+  --j-key:#C39BEF; --j-str:#4CC08E; --j-num:#E3A33E; --j-lit:#6D9BF0;
+  color-scheme:dark;
+}}
+:root[data-theme="dark"]{
+  --bg:#0F141A; --surface:#171E27; --sunken:#121820; --ink:#E4EAF1; --muted:#93A0AE; --line:#2A3440;
+  --rest:#6D9BF0; --rpc:#BE8DF0; --grpc:#3FC2C9;
+  --mark:#5C4A0E; --mark-ink:#FFE9A8;
+  --j-key:#C39BEF; --j-str:#4CC08E; --j-num:#E3A33E; --j-lit:#6D9BF0;
+  color-scheme:dark;
+}
+html,body{height:100%}
+body{box-sizing:border-box;background:var(--bg);color:var(--ink);font-family:var(--sans);overflow:hidden;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:12px}
+*,*::before,*::after{box-sizing:border-box}
+.viewport{position:relative;width:100%;height:100%;overflow:hidden}
+.stage{position:absolute;left:50%;top:50%;width:1280px;height:720px;transform:translate(-50%,-50%) scale(var(--s,1));
+  display:grid;grid-template-rows:auto auto 1fr auto;gap:12px;padding:4px;font-size:16px;line-height:1.45}
+button:focus-visible,input:focus-visible{outline:2px solid var(--rest);outline-offset:2px}
+
+.top{display:flex;align-items:flex-end;justify-content:space-between;gap:24px}
+.eyebrow{font-size:13px;letter-spacing:.08em;color:var(--muted);font-weight:500}
+h1{margin:2px 0 0;font-size:30px;line-height:1.15;font-weight:700;text-wrap:balance}
+.lead{margin:4px 0 0;color:var(--muted);font-size:15px}
+.btn-ghost{font:500 14px var(--sans);color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:8px 14px;cursor:pointer}
+.btn-ghost:hover{border-color:var(--muted)}
+
+/* scenario bar */
+.bar{display:flex;align-items:center;gap:16px;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:8px 12px}
+.bar .lbl{font-size:13px;font-weight:600;color:var(--muted);letter-spacing:.04em;white-space:nowrap}
+.seg{display:flex;gap:6px}
+.sbtn{font:500 15px var(--sans);padding:7px 14px;border-radius:7px;border:1.5px solid var(--line);background:var(--sunken);color:var(--ink);cursor:pointer;white-space:nowrap}
+.sbtn:hover{border-color:var(--muted)}
+.sbtn[aria-pressed="true"]{background:var(--ink);border-color:var(--ink);color:var(--surface)}
+.slider{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--muted);white-space:nowrap}
+.slider input{width:150px;accent-color:var(--grpc)}
+.slider b{font:600 15px var(--mono);color:var(--ink);min-width:3ch;text-align:right;font-variant-numeric:tabular-nums}
+.slider[hidden]{display:none}
+.toggle{margin-left:auto;display:flex;align-items:center;gap:8px;font-size:14px;cursor:pointer;white-space:nowrap}
+.toggle input{width:18px;height:18px;accent-color:var(--ink)}
+.toggle .sw{background:var(--mark);color:var(--mark-ink);padding:1px 6px;border-radius:4px;font-weight:600}
+
+/* three columns */
+.cols{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;min-height:0}
+.col{--c:var(--rest);background:var(--surface);border:1px solid var(--line);border-top:4px solid var(--c);border-radius:10px;padding:10px 14px 10px;display:flex;flex-direction:column;gap:8px;min-height:0;min-width:0}
+.col.rpc{--c:var(--rpc)} .col.grpc{--c:var(--grpc)}
+.ch{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+.ch h2{margin:0;font-size:19px;font-weight:700;color:var(--c)}
+.ch .how{font-size:13px;color:var(--muted)}
+.tabs{display:flex;gap:4px}
+.tab{font:500 12px var(--sans);padding:3px 8px;border-radius:5px;border:1px solid var(--line);background:var(--sunken);color:var(--muted);cursor:pointer}
+.tab[aria-pressed="true"]{color:var(--c);border-color:var(--c);background:var(--surface)}
+.msg{border:1px solid var(--line);border-radius:8px;background:var(--sunken);display:flex;flex-direction:column;min-height:0;flex:1}
+.msg header{display:flex;justify-content:space-between;align-items:center;padding:5px 10px;border-bottom:1px solid var(--line);font-size:13px;font-weight:600}
+.msg header .sz{font:500 12px var(--mono);color:var(--muted);font-variant-numeric:tabular-nums}
+.msg pre{position:relative;margin:0;padding:8px 10px;font:13px/1.5 var(--mono);white-space:pre-wrap;word-break:break-word;overflow:auto;min-height:0;flex:1}
+mark{background:transparent;color:inherit;border-radius:3px}
+.show-act mark{background:var(--mark);color:var(--mark-ink);box-shadow:0 0 0 2px var(--mark)}
+.show-act mark span{color:inherit}
+.dim{color:var(--muted)}
+.hex{color:var(--grpc);letter-spacing:.02em}
+.rule{color:var(--muted);font-family:var(--sans);font-size:12px}
+.j-k{color:var(--j-key)} .j-s{color:var(--j-str)} .j-n{color:var(--j-num)} .j-l{color:var(--j-lit)}
+.pk{color:var(--rpc);font-weight:600} .pt{color:var(--grpc)}
+
+/* bottom: bytes chart + takeaway */
+.foot{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:12px}
+.chart,.take{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px 14px}
+.chart h3,.take h3{margin:0 0 6px;font-size:14px;font-weight:700}
+.chart h3 small{font-weight:400;color:var(--muted);font-size:12px;margin-left:6px}
+.row{display:grid;grid-template-columns:84px 1fr 72px;align-items:center;gap:10px;height:24px}
+.row .nm{font:600 13px var(--mono);color:var(--c)}
+.row .track{height:14px;background:var(--sunken);border-radius:4px;overflow:hidden}
+.row .fill{height:100%;background:var(--c);border-radius:4px;width:0;transition:width .45s cubic-bezier(.3,0,.2,1)}
+.row .val{font:600 13px var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+.row.rest{--c:var(--rest)} .row.rpc{--c:var(--rpc)} .row.grpc{--c:var(--grpc)}
+.take p{margin:0;font-size:15px;line-height:1.6}
+.take .stat{margin-top:6px;font-size:13px;color:var(--muted)}
+.take .stat b{color:var(--grpc);font-family:var(--mono)}
+@media (prefers-reduced-motion: reduce){.row .fill{transition:none}}
+</style>
+</head>
+<body>
+
+
+<div class="viewport" id="vp">
+<div class="stage show-act" id="stage">
+  <div class="top">
+    <div>
+      <div class="eyebrow">API 怎麼溝通 · 互動練習</div>
+      <h1>同一件事，三種說法</h1>
+      <p class="lead">選一個任務，看 REST、JSON-RPC、gRPC 各自怎麼寫請求、回傳什麼，以及真正送出的資料有多大。</p>
+    </div>
+    <button class="btn-ghost" id="fs" type="button">全螢幕</button>
+  </div>
+
+  <div class="bar">
+    <span class="lbl">任務</span>
+    <div class="seg" id="seg" role="group" aria-label="選擇任務"></div>
+    <label class="slider" id="sl" hidden>學生人數 <input type="range" id="n" min="1" max="100" value="20"><b id="nv">20</b></label>
+    <label class="toggle"><input type="checkbox" id="act" checked> 標出<span class="sw">「動作」</span>寫在哪裡</label>
+  </div>
+
+  <div class="cols">
+    <section class="col rest" aria-label="REST">
+      <div class="ch"><h2>REST</h2><span class="how">資源（名詞）＋ HTTP 方法</span></div>
+      <div class="msg"><header><span>請求</span><span class="sz" id="rest-qs"></span></header><pre id="rest-q"></pre></div>
+      <div class="msg"><header><span>回應</span><span class="sz" id="rest-ss"></span></header><pre id="rest-s"></pre></div>
+    </section>
+    <section class="col rpc" aria-label="JSON-RPC">
+      <div class="ch"><h2>JSON-RPC</h2><span class="how">呼叫函式（動詞）· JSON 文字</span></div>
+      <div class="msg"><header><span>請求</span><span class="sz" id="rpc-qs"></span></header><pre id="rpc-q"></pre></div>
+      <div class="msg"><header><span>回應</span><span class="sz" id="rpc-ss"></span></header><pre id="rpc-s"></pre></div>
+    </section>
+    <section class="col grpc" aria-label="gRPC">
+      <div class="ch"><h2>gRPC</h2>
+        <div class="tabs"><button class="tab" id="t-call" type="button" aria-pressed="true">呼叫</button><button class="tab" id="t-proto" type="button" aria-pressed="false">.proto 合約</button></div>
+      </div>
+      <div class="msg" id="g-req"><header><span id="g-qh">請求</span><span class="sz" id="grpc-qs"></span></header><pre id="grpc-q"></pre></div>
+      <div class="msg" id="g-res"><header><span>回應</span><span class="sz" id="grpc-ss"></span></header><pre id="grpc-s"></pre></div>
+    </section>
+  </div>
+
+  <div class="foot">
+    <div class="chart">
+      <h3>回應資料大小<small>只算 Body；JSON 以不含空白計算，gRPC 含 5 bytes 訊框</small></h3>
+      <div class="row rest"><span class="nm">REST</span><div class="track"><div class="fill" id="b-rest"></div></div><span class="val" id="v-rest"></span></div>
+      <div class="row rpc"><span class="nm">JSON-RPC</span><div class="track"><div class="fill" id="b-rpc"></div></div><span class="val" id="v-rpc"></span></div>
+      <div class="row grpc"><span class="nm">gRPC</span><div class="track"><div class="fill" id="b-grpc"></div></div><span class="val" id="v-grpc"></span></div>
+    </div>
+    <div class="take">
+      <h3>看出什麼了？</h3>
+      <p id="take"></p>
+      <div class="stat" id="stat"></div>
+    </div>
+  </div>
+</div>
+</div>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const stage = $('stage'), vp = $('vp');
+  function fit(){ const s = Math.min(vp.clientWidth/1280, vp.clientHeight/720); stage.style.setProperty('--s', s > 0 ? s : 1); }
+  new ResizeObserver(fit).observe(vp); addEventListener('resize', fit); fit();
+
+  /* ---------- helpers ---------- */
+  const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const te = new TextEncoder();
+  const bytesOf = obj => te.encode(JSON.stringify(obj)).length;
+  function hl(obj){
+    return esc(JSON.stringify(obj, null, 2)).replace(
+      /("(\\u[a-fA-F0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d+)?(?:[eE][+\-]?\d+)?)/g,
+      m => {
+        let c = 'j-n';
+        if (/^"/.test(m)) c = /:$/.test(m) ? 'j-k' : 'j-s';
+        else if (/true|false|null/.test(m)) c = 'j-l';
+        return `<span class="${c}">${m}</span>`;
+      });
+  }
+  const markStr = (html, s) => html.replace(`<span class="j-s">"${s}"</span>`, `<mark><span class="j-s">"${s}"</span></mark>`);
+
+  /* ---------- tiny protobuf encoder (proto3 wire format) ---------- */
+  function varint(n){ const o = []; n >>>= 0; while (n > 127){ o.push((n & 127) | 128); n >>>= 7; } o.push(n); return o; }
+  const fInt = (f, n) => n ? [...varint(f << 3), ...varint(n)] : [];
+  const fStr = (f, s) => { const b = [...te.encode(s)]; return b.length ? [...varint(f << 3 | 2), ...varint(b.length), ...b] : []; };
+  const fMsg = (f, b) => [...varint(f << 3 | 2), ...varint(b.length), ...b];
+  const pStudent = s => [...fInt(1, s.id), ...fStr(2, s.name), ...fInt(3, s.grade), ...fStr(4, s.class)];
+  const frame = b => { const L = b.length; return [0, (L>>>24)&255, (L>>>16)&255, (L>>>8)&255, L&255, ...b]; };
+  function hex(b){
+    const max = 96, shown = b.slice(0, max).map(x => x.toString(16).padStart(2, '0')).join(' ');
+    return `<span class="hex">${shown}</span>` + (b.length > max ? `<span class="dim"> …（後面還有 ${b.length - max} bytes）</span>` : '');
+  }
+  const pText = s => `{ id: <span class="j-n">${s.id}</span>, name: <span class="j-s">"${esc(s.name)}"</span>, grade: <span class="j-n">${s.grade}</span>, class: <span class="j-s">"${esc(s.class)}"</span> }`;
+
+  /* ---------- sample data ---------- */
+  const NAMES = ['小明','小美','阿凱','怡君','志豪','雅婷','冠宇','佳穎','承恩','品妍','宇翔','詩涵','柏翰','子晴','家豪','欣妤','俊傑','思妤','建宏','若瑜'];
+  const CLS = ['A','B','C','D'];
+  const studentAt = i => ({ id: i + 1, name: NAMES[i % NAMES.length], grade: (i % 3) + 1, class: CLS[(i * 7 + 1) % 4] });
+  const first = { id:1, name:'小明', grade:2, class:'A' };
+  const PROTO = `<span class="pk">syntax</span> = <span class="j-s">"proto3"</span>;
+<span class="pk">package</span> school;
+
+<span class="pk">service</span> StudentService {
+  @@GetStudent@@<span class="pk">rpc</span> GetStudent (GetStudentRequest) <span class="pk">returns</span> (Student);@@
+  @@ListStudents@@<span class="pk">rpc</span> ListStudents (ListStudentsRequest) <span class="pk">returns</span> (ListStudentsResponse);@@
+  @@CreateStudent@@<span class="pk">rpc</span> CreateStudent (CreateStudentRequest) <span class="pk">returns</span> (Student);@@
+}
+<span class="pk">service</span> Calculator {
+  @@Add@@<span class="pk">rpc</span> Add (AddRequest) <span class="pk">returns</span> (AddReply);@@
+}
+
+<span class="pk">message</span> Student {
+  <span class="pt">int32</span>  id    = <span class="j-n">1</span>;
+  <span class="pt">string</span> name  = <span class="j-n">2</span>;
+  <span class="pt">int32</span>  grade = <span class="j-n">3</span>;
+  <span class="pt">string</span> class = <span class="j-n">4</span>;
+}
+<span class="pk">message</span> GetStudentRequest { <span class="pt">int32</span> id = <span class="j-n">1</span>; }
+<span class="pk">message</span> ListStudentsRequest {}
+<span class="pk">message</span> ListStudentsResponse { <span class="pk">repeated</span> Student students = <span class="j-n">1</span>; }
+<span class="pk">message</span> CreateStudentRequest { <span class="pt">string</span> name = <span class="j-n">1</span>; <span class="pt">int32</span> grade = <span class="j-n">2</span>; <span class="pt">string</span> class = <span class="j-n">3</span>; }
+<span class="pk">message</span> AddRequest { <span class="pt">int32</span> a = <span class="j-n">1</span>; <span class="pt">int32</span> b = <span class="j-n">2</span>; }
+<span class="pk">message</span> AddReply   { <span class="pt">int32</span> result = <span class="j-n">1</span>; }`;
+
+  /* ---------- scenarios ---------- */
+  const SCEN = {
+    get: {
+      label: '查詢 1 號學生',
+      take: '三種都做得到。REST 用<b>網址</b>指出「哪一個資源」，再用 GET 表示「讀取」；JSON-RPC 和 gRPC 則直接說「呼叫 getStudent 這個函式」。',
+      build(){
+        return {
+          rest: { req: `<mark><span class="hm">GET</span> /students/1</mark> <span class="dim">HTTP/1.1</span>\n<span class="dim">Host:</span> api.school.tw`,
+                  reqBytes: 0, reqNote: 'Body 0 B', status: '200 OK', body: first },
+          rpc:  { method: 'getStudent', params: { id: 1 }, result: first },
+          grpc: { rpc: 'GetStudent', svc: 'StudentService', reqName: 'GetStudentRequest', reqText: '{ id: <span class="j-n">1</span> }',
+                  reqBytes: fInt(1, 1), resName: 'Student', resText: pText(first), resBytes: pStudent(first) }
+        };
+      }
+    },
+    list: {
+      label: '列出全部學生',
+      take: '拉動「學生人數」看看：資料越多，差距越明顯。JSON 每一筆都要重寫 "name"、"grade" 這些欄位名稱；protobuf 只用 1 個 byte 的欄位編號代替。',
+      build(n){
+        const list = Array.from({ length: n }, (_, i) => studentAt(i));
+        const pbytes = list.flatMap(s => fMsg(1, pStudent(s)));
+        const lines = list.slice(0, 3).map(s => '  ' + pText(s)).join(',\n') + (n > 3 ? `,\n  <span class="dim">… 還有 ${n - 3} 筆</span>` : '');
+        return {
+          rest: { req: `<mark><span class="hm">GET</span> /students</mark> <span class="dim">HTTP/1.1</span>\n<span class="dim">Host:</span> api.school.tw`,
+                  reqBytes: 0, reqNote: 'Body 0 B', status: '200 OK', body: list, trim: true },
+          rpc:  { method: 'listStudents', params: {}, result: list, trim: true },
+          grpc: { rpc: 'ListStudents', svc: 'StudentService', reqName: 'ListStudentsRequest', reqText: '{ }',
+                  reqBytes: [], resName: 'ListStudentsResponse', resText: `{\n students: [\n${lines}\n ]\n}`, resBytes: pbytes }
+        };
+      }
+    },
+    create: {
+      label: '新增一位學生',
+      take: 'REST 對「學生集合」/students 送 POST，表示「在這裡新增一筆」；RPC 風格則幫動作取一個動詞名字：createStudent / CreateStudent。',
+      build(){
+        const input = { name:'小華', grade:1, class:'B' }, made = { id:5, ...input };
+        return {
+          rest: { req: `<mark><span class="hm">POST</span> /students</mark> <span class="dim">HTTP/1.1</span>\n<span class="dim">Host:</span> api.school.tw\n<span class="dim">Content-Type:</span> application/json\n\n${hl(input)}`,
+                  reqBytes: bytesOf(input), status: '201 Created', body: made },
+          rpc:  { method: 'createStudent', params: input, result: made },
+          grpc: { rpc: 'CreateStudent', svc: 'StudentService', reqName: 'CreateStudentRequest',
+                  reqText: `{ name: <span class="j-s">"小華"</span>, grade: <span class="j-n">1</span>, class: <span class="j-s">"B"</span> }`,
+                  reqBytes: [...fStr(1, input.name), ...fInt(2, input.grade), ...fStr(3, input.class)],
+                  resName: 'Student', resText: pText(made), resBytes: pStudent(made) }
+        };
+      }
+    },
+    add: {
+      label: '計算 3 + 5',
+      take: '「加法」沒有什麼「資源」可言，REST 只能硬湊一個網址出來。這種<b>純動作</b>的需求，正是 RPC「呼叫函式」思維的強項。',
+      build(){
+        return {
+          rest: { req: `<mark><span class="hm">GET</span> /calculator/add?a=3&amp;b=5</mark> <span class="dim">HTTP/1.1</span>\n<span class="dim">Host:</span> api.school.tw\n\n<span class="dim">← 「計算」不是資源，網址只好硬湊</span>`,
+                  reqBytes: 0, reqNote: 'Body 0 B', status: '200 OK', body: { result: 8 } },
+          rpc:  { method: 'add', params: [3, 5], result: 8 },
+          grpc: { rpc: 'Add', svc: 'Calculator', reqName: 'AddRequest', reqText: '{ a: <span class="j-n">3</span>, b: <span class="j-n">5</span> }',
+                  reqBytes: [...fInt(1, 3), ...fInt(2, 5)], resName: 'AddReply', resText: '{ result: <span class="j-n">8</span> }', resBytes: fInt(1, 8) }
+        };
+      }
+    }
+  };
+
+  let cur = 'get', n = 20, protoView = false;
+
+  function trimArray(html, total, closer, indent){
+    if (total <= 3) return html;
+    const i = html.lastIndexOf(closer);
+    return html.slice(0, i) + `,\n${indent}<span class="dim">… 還有 ${total - 3} 筆</span>` + html.slice(i);
+  }
+
+  function render(){
+    const sc = SCEN[cur], d = sc.build(n);
+    const total = cur === 'list' ? n : 0;
+
+    /* REST */
+    const restBodyBytes = bytesOf(d.rest.body);
+    $('rest-q').innerHTML = d.rest.req;
+    $('rest-qs').textContent = d.rest.reqNote || `Body ${d.rest.reqBytes} B`;
+    let rb = hl(d.rest.trim ? d.rest.body.slice(0, 3) : d.rest.body);
+    if (d.rest.trim) rb = trimArray(rb, total, '\n]', '  ');
+    $('rest-s').innerHTML = `<span class="dim">HTTP/1.1 ${d.rest.status}\nContent-Type: application/json</span>\n\n` + rb;
+    $('rest-ss').textContent = `Body ${restBodyBytes} B`;
+
+    /* JSON-RPC */
+    const rq = { jsonrpc: '2.0', method: d.rpc.method, params: d.rpc.params, id: 1 };
+    const rs = { jsonrpc: '2.0', result: d.rpc.result, id: 1 };
+    $('rpc-q').innerHTML = `<span class="dim">POST /rpc HTTP/1.1\nContent-Type: application/json</span>\n\n` + markStr(hl(rq), d.rpc.method);
+    $('rpc-qs').textContent = `Body ${bytesOf(rq)} B`;
+    let rr = hl(d.rpc.trim ? { ...rs, result: d.rpc.result.slice(0, 3) } : rs);
+    if (d.rpc.trim) rr = trimArray(rr, total, '\n  ]', '    ');
+    $('rpc-s').innerHTML = rr;
+    const rpcResBytes = bytesOf(rs);
+    $('rpc-ss').textContent = `Body ${rpcResBytes} B`;
+
+    /* gRPC */
+    const g = d.grpc, qf = frame(g.reqBytes), sf = frame(g.resBytes);
+    if (protoView){
+      $('g-qh').textContent = '.proto 合約（雙方事先講好的格式）';
+      $('grpc-q').innerHTML = PROTO.replace(/@@(\w+)@@(.*?)@@/g, (_, name, line) => name === g.rpc ? `<mark>${line}</mark>` : line);
+      $('grpc-qs').textContent = '';
+    } else {
+      $('g-qh').textContent = '請求';
+      $('grpc-q').innerHTML = `<span class="dim">POST</span> <mark>/school.${g.svc}/${g.rpc}</mark> <span class="dim">HTTP/2\ncontent-type: application/grpc</span>\n\n<span class="pt">${g.reqName}</span> ${g.reqText}\n\n<span class="rule">── 實際送出的位元組 ──</span>\n${hex(qf)}`;
+      $('grpc-qs').textContent = `${qf.length} B`;
+    }
+    $('g-req').style.flex = protoView ? '1.6' : '1';
+    const gq = $('grpc-q'), mk = protoView && gq.querySelector('mark');
+    gq.scrollTop = mk ? Math.max(0, mk.offsetTop - 60) : 0;
+    $('grpc-s').innerHTML = `<span class="dim">HTTP/2 200 · grpc-status: 0</span>\n\n<span class="pt">${g.resName}</span> ${g.resText}\n\n<span class="rule">── 實際收到的位元組 ──</span>\n${hex(sf)}`;
+    $('grpc-ss').textContent = `${sf.length} B`;
+
+    /* chart */
+    const vals = { rest: restBodyBytes, rpc: rpcResBytes, grpc: sf.length };
+    const max = Math.max(...Object.values(vals));
+    for (const k in vals){
+      $('b-' + k).style.width = (vals[k] / max * 100).toFixed(1) + '%';
+      $('v-' + k).textContent = vals[k] + ' B';
+    }
+    $('take').innerHTML = sc.take;
+    const save = Math.round((1 - vals.grpc / vals.rest) * 100);
+    $('stat').innerHTML = save > 0
+      ? `這個任務裡，gRPC 的回應比 REST 小 <b>${save}%</b>（${vals.rest} B → ${vals.grpc} B）。`
+      : `資料很少時，gRPC 多出的 5 bytes 訊框反而讓它不佔優勢（REST ${vals.rest} B、gRPC ${vals.grpc} B）。`;
+  }
+
+  /* ---------- wiring ---------- */
+  $('seg').innerHTML = Object.entries(SCEN).map(([k, s]) =>
+    `<button class="sbtn" type="button" id="sc-${k}" data-k="${k}" aria-pressed="${k === cur}">${s.label}</button>`).join('');
+  $('seg').addEventListener('click', e => {
+    const b = e.target.closest('.sbtn'); if (!b) return;
+    cur = b.dataset.k;
+    document.querySelectorAll('.sbtn').forEach(x => x.setAttribute('aria-pressed', x === b));
+    $('sl').hidden = cur !== 'list';
+    render();
+  });
+  $('n').addEventListener('input', e => { n = +e.target.value; $('nv').textContent = n; render(); });
+  $('act').addEventListener('change', e => stage.classList.toggle('show-act', e.target.checked));
+  $('t-call').addEventListener('click', () => { protoView = false; $('t-call').setAttribute('aria-pressed', true); $('t-proto').setAttribute('aria-pressed', false); render(); });
+  $('t-proto').addEventListener('click', () => { protoView = true; $('t-proto').setAttribute('aria-pressed', true); $('t-call').setAttribute('aria-pressed', false); render(); });
+  const fsBtn = $('fs');
+  fsBtn.addEventListener('click', async () => {
+    try { if (document.fullscreenElement) await document.exitFullscreen(); else await document.documentElement.requestFullscreen(); }
+    catch (e) { fsBtn.textContent = '無法全螢幕'; setTimeout(() => fsBtn.textContent = '全螢幕', 1600); }
+  });
+  document.addEventListener('fullscreenchange', () => { fsBtn.textContent = document.fullscreenElement ? '結束全螢幕' : '全螢幕'; fit(); });
+
+  render();
+})();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,435 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>JSON-RPC 操作台</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;700&display=swap">
+<style>
+/* Layout: fixed 1280×720 stage scaled to fit; same three columns as the REST console: client → wire → server */
+:root{
+  --bg:#E9EDF2; --surface:#FFFFFF; --sunken:#F3F5F8; --ink:#14202C; --muted:#5A6776; --line:#D0D8E1;
+  --acc:#7A3BB0; --ok:#12835A; --bad:#C4352F; --none:#6B7785;
+  --id1:#2360C4; --id2:#AD6B05; --id3:#12835A; --id4:#C2397E;
+  --j-key:#7338A8; --j-str:#12835A; --j-num:#AD6B05; --j-lit:#2360C4;
+  --sans:"IBM Plex Sans","Noto Sans TC",system-ui,-apple-system,"PingFang TC","Microsoft JhengHei",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,"Noto Sans TC",monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0F141A; --surface:#171E27; --sunken:#121820; --ink:#E4EAF1; --muted:#93A0AE; --line:#2A3440;
+  --acc:#B07FE6; --ok:#4CC08E; --bad:#F0716B; --none:#8994A1;
+  --id1:#6D9BF0; --id2:#E3A33E; --id3:#4CC08E; --id4:#EE7DB5;
+  --j-key:#C39BEF; --j-str:#4CC08E; --j-num:#E3A33E; --j-lit:#6D9BF0;
+  color-scheme:dark;
+}}
+:root[data-theme="dark"]{
+  --bg:#0F141A; --surface:#171E27; --sunken:#121820; --ink:#E4EAF1; --muted:#93A0AE; --line:#2A3440;
+  --acc:#B07FE6; --ok:#4CC08E; --bad:#F0716B; --none:#8994A1;
+  --id1:#6D9BF0; --id2:#E3A33E; --id3:#4CC08E; --id4:#EE7DB5;
+  --j-key:#C39BEF; --j-str:#4CC08E; --j-num:#E3A33E; --j-lit:#6D9BF0;
+  color-scheme:dark;
+}
+html,body{height:100%}
+body{box-sizing:border-box;background:var(--bg);color:var(--ink);font-family:var(--sans);overflow:hidden;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:12px}
+*,*::before,*::after{box-sizing:border-box}
+.viewport{position:relative;width:100%;height:100%;overflow:hidden}
+.stage{position:absolute;left:50%;top:50%;width:1280px;height:720px;transform:translate(-50%,-50%) scale(var(--s,1));
+  display:grid;grid-template-rows:auto 1fr;gap:14px;padding:4px;font-size:16px;line-height:1.45}
+button:focus-visible,textarea:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+
+.top{display:flex;align-items:flex-end;justify-content:space-between;gap:24px}
+.eyebrow{font-size:13px;letter-spacing:.08em;color:var(--muted);font-weight:500}
+h1{margin:2px 0 0;font-size:30px;line-height:1.15;font-weight:700;text-wrap:balance}
+.lead{margin:4px 0 0;color:var(--muted);font-size:15px}
+.tools{display:flex;gap:8px}
+.btn-ghost{font:500 14px var(--sans);color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:8px 14px;cursor:pointer}
+.btn-ghost:hover{border-color:var(--muted)}
+
+.cols{display:grid;grid-template-columns:372px minmax(0,1fr) 336px;gap:14px;min-height:0}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 16px;display:flex;flex-direction:column;gap:9px;min-height:0;min-width:0}
+.ph{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+.ph h2{margin:0;font-size:17px;font-weight:700}
+.ph h2 .step{font-family:var(--mono);color:var(--muted);font-weight:500;margin-right:6px}
+.ph .sub{font-size:13px;color:var(--muted)}
+.lbl{font-size:13px;font-weight:600;color:var(--muted);letter-spacing:.04em;display:flex;justify-content:space-between;align-items:center}
+.jsonstate{font-weight:500;letter-spacing:0;font-size:12px}
+.jsonstate.ok{color:var(--ok)} .jsonstate.bad{color:var(--bad)}
+
+textarea{flex:1;min-height:0;resize:none;border:1.5px solid var(--line);border-radius:8px;background:var(--sunken);color:var(--ink);font:14px/1.5 var(--mono);padding:8px 10px}
+textarea:focus{border-color:var(--acc)}
+.say{border-left:3px solid var(--acc);background:var(--sunken);border-radius:0 8px 8px 0;padding:7px 12px;font-size:15px;min-height:44px}
+.say small{display:block;font-size:12px;color:var(--muted);font-weight:600;letter-spacing:.04em}
+.send{font:700 17px var(--sans);color:#fff;background:var(--acc);border:0;border-radius:8px;padding:10px;cursor:pointer;display:flex;justify-content:center;gap:10px;align-items:center}
+.send .k{font:500 12px var(--mono);opacity:.8}
+.send:disabled{opacity:.55;cursor:progress}
+.chips{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.chip{font:500 13px var(--sans);border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:6px;padding:5px 6px;cursor:pointer;text-align:center;white-space:nowrap}
+.chip:hover{border-color:var(--acc);color:var(--acc)}
+.chip.err{color:var(--bad)} .chip.err:hover{border-color:var(--bad)}
+
+/* wire */
+.wire{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:12px;padding:4px 2px}
+.node{font-size:14px;font-weight:600;border:1.5px solid var(--line);border-radius:8px;padding:7px 12px;background:var(--sunken);text-align:center;transition:border-color .2s}
+.node small{display:block;font:500 11px var(--mono);color:var(--muted)}
+.node.hot{border-color:var(--acc)}
+.track{position:relative;height:40px}
+.track::before{content:"";position:absolute;left:0;right:0;top:50%;border-top:2px dashed var(--line)}
+.packet{position:absolute;top:50%;left:0;transform:translate(-50%,-50%);font:700 13px var(--mono);padding:5px 10px;border-radius:999px;background:var(--pc,var(--acc));color:#fff;white-space:nowrap;opacity:0}
+.dir{position:absolute;left:50%;top:-4px;transform:translateX(-50%);font-size:12px;color:var(--muted);white-space:nowrap}
+
+.msg{border:1px solid var(--line);border-radius:8px;background:var(--sunken);display:flex;flex-direction:column;min-height:0}
+.msg header{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 12px;border-bottom:1px solid var(--line);font-size:14px;font-weight:600}
+.msg header .hint{font-weight:400;color:var(--muted);font-size:12px}
+.msg pre{margin:0;padding:10px 12px;font:14px/1.55 var(--mono);white-space:pre-wrap;word-break:break-word;overflow:auto;min-height:0}
+.req{flex:0 1 auto;max-height:46%}
+.res{flex:1}
+.status{font:700 13px var(--mono);padding:3px 9px;border-radius:999px;color:#fff;background:var(--none)}
+.status.ok{background:var(--ok)} .status.bad{background:var(--bad)}
+.statmean{font-weight:500;font-size:13px;color:var(--muted);margin-left:8px}
+.order{display:block;padding:7px 12px;border-top:1px solid var(--line);font-size:13px;color:var(--muted)}
+.order[hidden]{display:none}
+.j-k{color:var(--j-key)} .j-s{color:var(--j-str)} .j-n{color:var(--j-num)} .j-l{color:var(--j-lit)}
+.dim{color:var(--muted)}
+.empty{color:var(--muted);font-family:var(--sans);font-size:14px}
+.idb{font-weight:700;color:#fff;background:var(--c);padding:0 6px;border-radius:4px}
+.i1{--c:var(--id1)} .i2{--c:var(--id2)} .i3{--c:var(--id3)} .i4{--c:var(--id4)}
+.errk{color:var(--bad);font-weight:600}
+
+/* server */
+.fn{display:flex;flex-direction:column;gap:5px}
+.fn div{display:flex;justify-content:space-between;gap:8px;align-items:baseline;padding:5px 9px;border:1px solid var(--line);border-radius:6px;background:var(--sunken);transition:border-color .3s,background-color .3s}
+.fn code{font:600 14px var(--mono)}
+.fn code i{font-style:normal;color:var(--muted);font-weight:400}
+.fn span{font-size:12px;color:var(--muted);text-align:right}
+.fn div.hit{border-color:var(--acc);background:color-mix(in srgb,var(--acc) 12%,transparent)}
+table{width:100%;border-collapse:collapse;font-size:13px}
+td{padding:5px 8px;border-bottom:1px solid var(--line)}
+tr:last-child td{border-bottom:0}
+td.c{font:600 13px var(--mono);color:var(--bad);white-space:nowrap;width:1%}
+td{white-space:nowrap}
+td.m{font:11px var(--mono);color:var(--muted);text-align:right}
+tr{transition:background-color .3s}
+tr.hit{background:color-mix(in srgb,var(--bad) 16%,transparent)}
+.tbl{border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.log{flex:1;min-height:0;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:6px 10px;font:12.5px/1.6 var(--mono);background:var(--sunken)}
+.log div{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.log .t{color:var(--muted)}
+.log .n{color:var(--acc)} .log .e{color:var(--bad)}
+@media (prefers-reduced-motion: reduce){tr,.fn div{transition:none}}
+</style>
+</head>
+<body>
+
+
+<div class="viewport" id="vp">
+<div class="stage" id="stage">
+  <div class="top">
+    <div>
+      <div class="eyebrow">API 怎麼溝通 · 互動練習</div>
+      <h1>JSON-RPC 操作台</h1>
+      <p class="lead">自己寫一個 JSON 請求，指定要呼叫的函式和參數，看伺服器怎麼回。也試試寫錯、拿掉 id、一次送好幾個。</p>
+    </div>
+    <div class="tools">
+      <button class="btn-ghost" id="clear" type="button">清空紀錄</button>
+      <button class="btn-ghost" id="fs" type="button">全螢幕</button>
+    </div>
+  </div>
+
+  <div class="cols">
+    <section class="panel" aria-label="用戶端">
+      <div class="ph"><h2><span class="step">1</span>用戶端 Client</h2><span class="sub">POST 到 /rpc</span></div>
+      <div class="lbl"><span>請求（JSON）</span><span class="jsonstate" id="jstate"></span></div>
+      <textarea id="body" spellcheck="false" aria-label="JSON-RPC 請求"></textarea>
+      <div class="say"><small>白話翻譯</small><span id="say"></span></div>
+      <button class="send" id="send" type="button">送出請求 <span class="k">Ctrl + Enter</span></button>
+      <div class="lbl">快速範例（先猜結果，再送出）</div>
+      <div class="chips" id="chips"></div>
+    </section>
+
+    <section class="panel" aria-label="網路上的訊息">
+      <div class="ph"><h2><span class="step">2</span>網路上傳遞的訊息</h2><span class="sub">一律是 HTTP POST + JSON</span></div>
+      <div class="wire">
+        <div class="node" id="nc">用戶端<small>你的 App</small></div>
+        <div class="track"><span class="dir" id="dir"></span><span class="packet" id="packet"></span></div>
+        <div class="node" id="ns">伺服器<small>api.school.tw/rpc</small></div>
+      </div>
+      <div class="msg req">
+        <header><span>請求 Request</span><span class="hint">method + params + id</span></header>
+        <pre id="reqpre"></pre>
+      </div>
+      <div class="msg res">
+        <header><span>回應 Response</span><span id="stat"></span></header>
+        <pre id="respre"><span class="empty">送出請求後，伺服器的回應會出現在這裡。</span></pre>
+        <div class="order" id="order" hidden></div>
+      </div>
+    </section>
+
+    <section class="panel" aria-label="伺服器">
+      <div class="ph"><h2><span class="step">3</span>伺服器 Server</h2><span class="sub">能被呼叫的函式</span></div>
+      <div class="fn" id="fns">
+        <div data-fn="add"><code>add<i>(a, b)</i></code><span>兩數相加</span></div>
+        <div data-fn="subtract"><code>subtract<i>(a, b)</i></code><span>a 減 b</span></div>
+        <div data-fn="getStudent"><code>getStudent<i>(id)</i></code><span>查學生，id 1–4</span></div>
+        <div data-fn="logVisit"><code>logVisit<i>(page)</i></code><span>記錄瀏覽，不需回覆</span></div>
+      </div>
+      <div class="lbl">標準錯誤碼</div>
+      <div class="tbl"><table><tbody id="errs">
+        <tr data-code="-32700"><td class="c">-32700</td><td>JSON 格式錯誤</td><td class="m">Parse error</td></tr>
+        <tr data-code="-32600"><td class="c">-32600</td><td>不是合法的請求</td><td class="m">Invalid Request</td></tr>
+        <tr data-code="-32601"><td class="c">-32601</td><td>找不到這個函式</td><td class="m">Method not found</td></tr>
+        <tr data-code="-32602"><td class="c">-32602</td><td>參數不對</td><td class="m">Invalid params</td></tr>
+      </tbody></table></div>
+      <div class="lbl">伺服器紀錄</div>
+      <div class="log" id="log"></div>
+    </section>
+  </div>
+</div>
+</div>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const stage = $('stage'), vp = $('vp');
+  function fit(){ const s = Math.min(vp.clientWidth/1280, vp.clientHeight/720); stage.style.setProperty('--s', s > 0 ? s : 1); }
+  new ResizeObserver(fit).observe(vp); addEventListener('resize', fit); fit();
+
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let DUR = reduce ? 0 : 650, busy = false;
+
+  const STUDENTS = { 1:{id:1,name:'小明',grade:2,class:'A'}, 2:{id:2,name:'小美',grade:2,class:'B'}, 3:{id:3,name:'阿凱',grade:1,class:'A'}, 4:{id:4,name:'怡君',grade:3,class:'C'} };
+  /* pretty JSON, but keep short arrays like [3, 5] on one line */
+  const P = o => JSON.stringify(o, null, 2).replace(/\[\s+([^\[\]{}]*?)\s+\]/g, (_, inner) => '[' + inner.split(/,\s+/).join(', ') + ']');
+  const EX = [
+    ['add 位置參數', P({jsonrpc:'2.0', method:'add', params:[3,5], id:1})],
+    ['subtract 具名參數', P({jsonrpc:'2.0', method:'subtract', params:{a:10,b:4}, id:2})],
+    ['getStudent', P({jsonrpc:'2.0', method:'getStudent', params:{id:1}, id:3})],
+    ['函式名稱打錯', P({jsonrpc:'2.0', method:'mutiply', params:[2,3], id:4}), 'err'],
+    ['參數給錯', P({jsonrpc:'2.0', method:'add', params:['三',5], id:5}), 'err'],
+    ['JSON 格式錯', '{\n  "jsonrpc": "2.0",\n  "method": "add",\n  "params": [3, 5],\n  "id": 6\n', 'err'],
+    ['通知（沒有 id）', P({jsonrpc:'2.0', method:'logVisit', params:{page:'首頁'}})],
+    ['批次 ×3', P([
+      {jsonrpc:'2.0', method:'add', params:[3,5], id:1},
+      {jsonrpc:'2.0', method:'getStudent', params:{id:2}, id:2},
+      {jsonrpc:'2.0', method:'subtract', params:[10,4], id:3}
+    ])],
+    ['批次 + 通知', P([
+      {jsonrpc:'2.0', method:'add', params:[1,1], id:1},
+      {jsonrpc:'2.0', method:'logVisit', params:{page:'成績頁'}},
+      {jsonrpc:'2.0', method:'getStudent', params:{id:9}, id:2}
+    ])]
+  ];
+
+  /* ---------- helpers ---------- */
+  const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const idClass = id => typeof id === 'number' ? 'i' + (((id - 1) % 4 + 4) % 4 + 1) : 'i4';
+  /* mark only the top-level request/response ids (not e.g. a student's own id) */
+  const tagIds = o => Array.isArray(o) ? o.map(tagIds)
+    : (o && typeof o === 'object' && 'id' in o) ? { ...o, id: '@@ID:' + JSON.stringify(o.id) + '@@' } : o;
+  function hl(obj){
+    let html = esc(P(tagIds(obj))).replace(
+      /("(\\u[a-fA-F0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d+)?(?:[eE][+\-]?\d+)?)/g,
+      m => {
+        let c = 'j-n';
+        if (/^"/.test(m)) c = /:$/.test(m) ? 'j-k' : 'j-s';
+        else if (/true|false|null/.test(m)) c = 'j-l';
+        return `<span class="${c}">${m}</span>`;
+      });
+    /* colour every request/response id so pairs are easy to match */
+    html = html.replace(/<span class="j-s">"@@ID:(.*?)@@"<\/span>/g, (_, raw) => {
+      const v = raw.replace(/\\"/g, '"');
+      return /^-?\d+$/.test(v) ? `<span class="idb ${idClass(+v)}">${v}</span>` : `<span class="j-l">${v}</span>`;
+    });
+    html = html.replace(/(<span class="j-k">"code":<\/span> )<span class="j-n">(-?\d+)<\/span>/g,
+      (_, k, n) => `${k}<span class="errk">${n}</span>`);
+    return html;
+  }
+  function parse(){ try { return { ok:true, v: JSON.parse($('body').value) }; } catch(e){ return { ok:false, err:e.message }; } }
+
+  /* ---------- plain-language translation ---------- */
+  function describe(o){
+    if (!o || typeof o !== 'object' || Array.isArray(o)) return '不是一個請求物件';
+    const ps = o.params === undefined ? '不帶參數' : `參數 ${esc(JSON.stringify(o.params))}`;
+    if (!('id' in o)) return `<b>通知</b>：叫伺服器執行 <b>${esc(o.method)}</b>（${ps}），但<b>不需要回覆</b>。`;
+    return `呼叫遠端函式 <b>${esc(o.method)}</b>，${ps}，請求編號 id = <b>${esc(JSON.stringify(o.id))}</b>。`;
+  }
+  function refresh(){
+    const r = parse(), js = $('jstate');
+    js.textContent = r.ok ? 'JSON 格式正確' : 'JSON 格式有誤';
+    js.className = 'jsonstate ' + (r.ok ? 'ok' : 'bad');
+    let s;
+    if (!r.ok) s = '這不是合法的 JSON，伺服器連內容都讀不懂，會回 <b>-32700</b>。';
+    else if (Array.isArray(r.v)) {
+      const notes = r.v.filter(x => x && typeof x === 'object' && !('id' in x)).length;
+      s = `<b>批次</b>：一次送出 ${r.v.length} 個請求` + (notes ? `（其中 ${notes} 個是通知）` : '') + '，回應會裝在一個陣列裡回來。';
+    } else s = describe(r.v);
+    $('say').innerHTML = s;
+  }
+
+  /* ---------- the server (JSON-RPC 2.0 rules) ---------- */
+  const ERR = { '-32700':'Parse error', '-32600':'Invalid Request', '-32601':'Method not found', '-32602':'Invalid params' };
+  const errObj = (code, id, data) => ({ jsonrpc:'2.0', error: Object.assign({ code, message: ERR[code] || 'Server error' }, data ? { data } : {}), id });
+  const isNum = x => typeof x === 'number' && isFinite(x);
+  const twoNums = p => {
+    const [a, b] = Array.isArray(p) ? p : (p && typeof p === 'object') ? [p.a, p.b] : [];
+    return isNum(a) && isNum(b) ? [a, b] : null;
+  };
+  const METHODS = {
+    add(p){ const v = twoNums(p); if (!v) throw { code:-32602, data:'a 和 b 都要是數字' }; return v[0] + v[1]; },
+    subtract(p){ const v = twoNums(p); if (!v) throw { code:-32602, data:'a 和 b 都要是數字' }; return v[0] - v[1]; },
+    getStudent(p){
+      const id = Array.isArray(p) ? p[0] : p && p.id;
+      if (!isNum(id)) throw { code:-32602, data:'需要數字參數 id' };
+      if (!STUDENTS[id]) throw { code:-32001, message:'Student not found', data:`沒有 id 為 ${id} 的學生` };
+      return STUDENTS[id];
+    },
+    logVisit(p){ return 'ok'; }
+  };
+  let hits = { fns:new Set(), codes:new Set() };
+  function one(o){
+    const validId = o && typeof o === 'object' && 'id' in o && (o.id === null || typeof o.id === 'string' || typeof o.id === 'number');
+    if (!o || typeof o !== 'object' || Array.isArray(o) || o.jsonrpc !== '2.0' || typeof o.method !== 'string'
+        || (o.params !== undefined && (typeof o.params !== 'object' || o.params === null))){
+      hits.codes.add(-32600); log('e', '錯誤 -32600：請求格式不對');
+      return errObj(-32600, validId ? o.id : null);
+    }
+    const notify = !('id' in o);
+    const fn = METHODS[o.method];
+    if (!fn){
+      hits.codes.add(-32601);
+      log('e', `錯誤 -32601：沒有函式 ${o.method}` + (notify ? '（通知，不回覆）' : ''));
+      return notify ? undefined : errObj(-32601, o.id, `沒有叫做 ${o.method} 的函式`);
+    }
+    hits.fns.add(o.method);
+    try {
+      const result = fn(o.params);
+      if (notify){ log('n', `收到通知 ${o.method} ${JSON.stringify(o.params ?? '')}，不回覆`); return undefined; }
+      log('', `執行 ${o.method}（id ${JSON.stringify(o.id)}）→ ${JSON.stringify(result)}`);
+      return { jsonrpc:'2.0', result, id:o.id };
+    } catch (e){
+      if (ERR[e.code]) hits.codes.add(e.code);
+      log('e', `錯誤 ${e.code}：${o.method}（${e.data}）`);
+      if (notify) return undefined;
+      return { jsonrpc:'2.0', error:{ code:e.code, message:e.message || ERR[e.code], data:e.data }, id:o.id };
+    }
+  }
+  function handle(text){
+    let v;
+    try { v = JSON.parse(text); }
+    catch { hits.codes.add(-32700); log('e', '錯誤 -32700：讀不懂這段 JSON'); return { body: errObj(-32700, null) }; }
+    if (Array.isArray(v)){
+      if (!v.length){ hits.codes.add(-32600); log('e', '錯誤 -32600：空的批次'); return { body: errObj(-32600, null) }; }
+      log('t', `── 收到批次，共 ${v.length} 個請求 ──`);
+      const out = v.map(one).filter(Boolean);
+      if (!out.length) return { body: undefined };
+      /* finish order differs from send order: rotate so the last one comes back first */
+      const shuffled = out.length > 1 ? [out[out.length - 1], ...out.slice(0, -1)] : out;
+      return { body: shuffled, batch:true, sentIds: v.filter(x => x && 'id' in x).map(x => x.id) };
+    }
+    return { body: one(v) };
+  }
+
+  /* ---------- server log ---------- */
+  function log(kind, text){
+    const d = document.createElement('div');
+    if (kind) d.className = kind;
+    d.textContent = text;
+    $('log').appendChild(d);
+    $('log').scrollTop = $('log').scrollHeight;
+  }
+
+  /* ---------- packet animation ---------- */
+  function fly(toServer, label, color){
+    const p = $('packet');
+    p.textContent = label; p.style.setProperty('--pc', color);
+    $('dir').textContent = toServer ? '請求 →' : '← 回應';
+    $('nc').classList.toggle('hot', toServer); $('ns').classList.toggle('hot', !toServer);
+    if (!DUR){ p.style.opacity = 0; return Promise.resolve(); }
+    const from = toServer ? '0%' : '100%', to = toServer ? '100%' : '0%';
+    return p.animate([{ left:from, opacity:0 }, { opacity:1, offset:.12 }, { opacity:1, offset:.88 }, { left:to, opacity:0 }],
+      { duration: DUR, easing:'cubic-bezier(.45,0,.35,1)', fill:'forwards' }).finished;
+  }
+  function flash(){
+    document.querySelectorAll('#fns div').forEach(d => d.classList.toggle('hit', hits.fns.has(d.dataset.fn)));
+    document.querySelectorAll('#errs tr').forEach(r => r.classList.toggle('hit', hits.codes.has(+r.dataset.code)));
+  }
+
+  async function send(){
+    if (busy) return;
+    busy = true; $('send').disabled = true;
+    hits = { fns:new Set(), codes:new Set() }; flash();
+    const text = $('body').value, r = parse();
+    const head = '<span class="dim">POST /rpc HTTP/1.1\nHost: api.school.tw\nContent-Type: application/json</span>\n\n';
+    $('reqpre').innerHTML = head + (r.ok ? hl(r.v) : esc(text));
+    $('stat').innerHTML = '<span class="statmean">等待伺服器回應…</span>';
+    $('respre').innerHTML = '<span class="empty">請求傳送中…</span>';
+    $('order').hidden = true;
+
+    let label = 'JSON（格式錯誤）';
+    if (r.ok){
+      if (Array.isArray(r.v)) label = `批次 ×${r.v.length}`;
+      else if (r.v && typeof r.v === 'object') label = ('id' in r.v) ? `${r.v.method} · id ${JSON.stringify(r.v.id)}` : `${r.v.method}（通知）`;
+    }
+    await fly(true, label, 'var(--acc)');
+    const res = handle(text);
+    flash();
+
+    if (res.body === undefined){
+      $('dir').textContent = '（伺服器不回覆）';
+      $('stat').innerHTML = '<span class="status">沒有回應</span><span class="statmean">通知不需要回覆</span>';
+      $('respre').innerHTML = '<span class="dim">HTTP/1.1 204 No Content</span>\n\n<span class="empty">請求裡沒有 id，代表這是「通知」。伺服器有收到也照做了（看右邊的紀錄），但不會回傳任何內容。</span>';
+    } else {
+      const list = Array.isArray(res.body) ? res.body : [res.body];
+      const errs = list.filter(x => x.error).length;
+      const color = errs === list.length ? 'var(--bad)' : 'var(--ok)';
+      const back = res.batch ? `批次回應 ×${list.length}` : (errs ? `error ${list[0].error.code}` : `result · id ${JSON.stringify(list[0].id)}`);
+      await fly(false, back, color);
+      $('respre').innerHTML = '<span class="dim">HTTP/1.1 200 OK\nContent-Type: application/json</span>\n\n' + hl(res.body);
+      if (res.batch){
+        $('stat').innerHTML = `<span class="status ${errs ? 'bad' : 'ok'}">${list.length - errs} 成功 · ${errs} 錯誤</span>`;
+        const got = list.map(x => `<span class="idb ${idClass(x.id)}">${x.id}</span>`).join(' ');
+        const sent = res.sentIds.map(id => `<span class="idb ${idClass(id)}">${id}</span>`).join(' ');
+        const missing = res.sentIds.length !== (JSON.parse(text).length);
+        $('order').innerHTML = `送出順序 ${sent}　回來順序 ${got}　<b>順序不同，要靠 id 配對</b>` + (missing ? '（通知沒有回應）' : '');
+        $('order').hidden = false;
+      } else if (errs){
+        const e = list[0].error;
+        $('stat').innerHTML = `<span class="status bad">error ${e.code}</span><span class="statmean">${esc(e.message)}</span>`;
+      } else {
+        $('stat').innerHTML = '<span class="status ok">result</span><span class="statmean">呼叫成功</span>';
+      }
+    }
+    $('nc').classList.remove('hot'); $('ns').classList.remove('hot');
+    if ($('dir').textContent !== '（伺服器不回覆）') $('dir').textContent = '';
+    busy = false; $('send').disabled = false;
+  }
+
+  /* ---------- wiring ---------- */
+  $('chips').innerHTML = EX.map(([l, , k], i) => `<button class="chip ${k || ''}" type="button" id="ex-${i}" data-i="${i}">${l}</button>`).join('');
+  $('chips').addEventListener('click', e => {
+    const b = e.target.closest('.chip'); if (!b) return;
+    $('body').value = EX[b.dataset.i][1]; refresh(); $('send').focus();
+  });
+  $('body').addEventListener('input', refresh);
+  $('body').addEventListener('keydown', e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)){ e.preventDefault(); send(); } });
+  $('send').addEventListener('click', send);
+  $('clear').addEventListener('click', () => { $('log').innerHTML = ''; });
+  const fsBtn = $('fs');
+  fsBtn.addEventListener('click', async () => {
+    try { if (document.fullscreenElement) await document.exitFullscreen(); else await document.documentElement.requestFullscreen(); }
+    catch (e) { fsBtn.textContent = '無法全螢幕'; setTimeout(() => fsBtn.textContent = '全螢幕', 1600); }
+  });
+  document.addEventListener('fullscreenchange', () => { fsBtn.textContent = document.fullscreenElement ? '結束全螢幕' : '全螢幕'; fit(); });
+
+  /* start in a working state: one finished call */
+  $('body').value = EX[0][1]; refresh();
+  const keep = DUR; DUR = 0;
+  send().then(() => { DUR = keep; });
+})();
+</script>
+
+</body>
+</html>
