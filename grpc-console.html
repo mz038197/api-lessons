@@ -1,0 +1,729 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>gRPC 操作台</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;700&display=swap">
+<style>
+/* Layout: fixed 1280×720 stage scaled to fit; header + tab bar, then one of four full-width views (each addressable by #hash) */
+:root{
+  --bg:#E9EDF2; --surface:#FFFFFF; --sunken:#F3F5F8; --ink:#14202C; --muted:#5A6776; --line:#D0D8E1;
+  --acc:#0E7C86; --cli:#2360C4; --srv:#0E7C86; --ok:#12835A; --bad:#C4352F; --warn:#AD6B05;
+  --f1:#2360C4; --f2:#7A3BB0; --f3:#AD6B05; --f4:#C2397E; --f5:#12835A; --fr:#6B7785;
+  --j-key:#7338A8; --j-str:#12835A; --j-num:#AD6B05;
+  --sans:"IBM Plex Sans","Noto Sans TC",system-ui,-apple-system,"PingFang TC","Microsoft JhengHei",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,"Noto Sans TC",monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0F141A; --surface:#171E27; --sunken:#121820; --ink:#E4EAF1; --muted:#93A0AE; --line:#2A3440;
+  --acc:#3FC2C9; --cli:#6D9BF0; --srv:#3FC2C9; --ok:#4CC08E; --bad:#F0716B; --warn:#E3A33E;
+  --f1:#6D9BF0; --f2:#BE8DF0; --f3:#E3A33E; --f4:#EE7DB5; --f5:#4CC08E; --fr:#8994A1;
+  --j-key:#C39BEF; --j-str:#4CC08E; --j-num:#E3A33E;
+  color-scheme:dark;
+}}
+:root[data-theme="dark"]{
+  --bg:#0F141A; --surface:#171E27; --sunken:#121820; --ink:#E4EAF1; --muted:#93A0AE; --line:#2A3440;
+  --acc:#3FC2C9; --cli:#6D9BF0; --srv:#3FC2C9; --ok:#4CC08E; --bad:#F0716B; --warn:#E3A33E;
+  --f1:#6D9BF0; --f2:#BE8DF0; --f3:#E3A33E; --f4:#EE7DB5; --f5:#4CC08E; --fr:#8994A1;
+  --j-key:#C39BEF; --j-str:#4CC08E; --j-num:#E3A33E;
+  color-scheme:dark;
+}
+html,body{height:100%}
+body{box-sizing:border-box;background:var(--bg);color:var(--ink);font-family:var(--sans);overflow:hidden;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:12px}
+*,*::before,*::after{box-sizing:border-box}
+.viewport{position:relative;width:100%;height:100%;overflow:hidden;overflow:clip}
+.stage{position:absolute;left:50%;top:50%;width:1280px;height:720px;transform:translate(-50%,-50%) scale(var(--s,1));
+  display:grid;grid-template-rows:auto auto 1fr;gap:12px;padding:4px;font-size:16px;line-height:1.45}
+button,input,textarea{font:inherit;color:inherit}
+button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+
+.top{display:flex;align-items:flex-end;justify-content:space-between;gap:24px}
+.eyebrow{font-size:13px;letter-spacing:.08em;color:var(--muted);font-weight:500}
+h1{margin:2px 0 0;font-size:30px;line-height:1.15;font-weight:700}
+.lead{margin:4px 0 0;color:var(--muted);font-size:15px}
+.btn-ghost{font:500 14px var(--sans);background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:8px 14px;cursor:pointer}
+.btn-ghost:hover{border-color:var(--muted)}
+
+.tabs{display:flex;gap:6px;border-bottom:1px solid var(--line)}
+.tab{font:600 15px var(--sans);padding:8px 16px;border:0;border-bottom:3px solid transparent;background:none;color:var(--muted);cursor:pointer;margin-bottom:-1px}
+.tab:hover{color:var(--ink)}
+.tab[aria-selected="true"]{color:var(--acc);border-bottom-color:var(--acc)}
+.tab small{font:500 12px var(--mono);margin-left:6px;opacity:.75}
+
+.view{min-height:0;display:grid;gap:14px}
+.view[hidden]{display:none}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 16px;display:flex;flex-direction:column;gap:10px;min-height:0;min-width:0}
+.ph{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+.ph h2{margin:0;font-size:17px;font-weight:700}
+.ph .sub{font-size:13px;color:var(--muted)}
+.lbl{font-size:13px;font-weight:600;color:var(--muted);letter-spacing:.04em}
+.note{font-size:14px;line-height:1.6;color:var(--muted);background:var(--sunken);border-radius:8px;padding:9px 12px}
+.note b{color:var(--ink)}
+.btn{font:700 15px var(--sans);color:#fff;background:var(--acc);border:0;border-radius:8px;padding:9px 16px;cursor:pointer}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.btn.sec{background:var(--surface);color:var(--ink);border:1px solid var(--line);font-weight:600}
+.chip{font:500 13px var(--sans);border:1px solid var(--line);background:var(--surface);border-radius:6px;padding:5px 9px;cursor:pointer;white-space:nowrap}
+.chip:hover{border-color:var(--acc);color:var(--acc)}
+code,.mono{font-family:var(--mono)}
+.kw{color:var(--f2);font-weight:600} .ty{color:var(--acc)} .nu{color:var(--j-num)}
+.stream-kw{background:color-mix(in srgb,var(--warn) 25%,transparent);color:var(--warn);font-weight:700;border-radius:3px;padding:0 3px}
+
+/* ---------- view 1: streams ---------- */
+#v-streams{grid-template-columns:330px minmax(0,1fr)}
+.modes{display:flex;flex-direction:column;gap:6px}
+.mode{display:block;text-align:left;border:1.5px solid var(--line);background:var(--sunken);border-radius:8px;padding:6px 10px;cursor:pointer}
+.mode:hover{border-color:var(--muted)}
+.mode[aria-pressed="true"]{border-color:var(--acc);background:var(--surface);box-shadow:inset 3px 0 0 var(--acc)}
+.mode > b{font-size:15px;display:block}
+.mode > span{font-size:13px;color:var(--muted);display:block}
+.mode code{display:block;font-size:11px;margin-top:2px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ctrl{display:flex;gap:8px;align-items:center}
+.ctrl input{flex:1;min-width:0;border:1.5px solid var(--line);border-radius:8px;background:var(--sunken);padding:8px 10px;font-size:14px}
+.ctrl input:disabled{opacity:.5}
+.seq{display:grid;grid-template-rows:auto auto 1fr;min-height:0;gap:8px}
+.seqhead{display:grid;grid-template-columns:56px 130px 1fr 130px;align-items:center;gap:0}
+.lane{font-weight:700;font-size:15px;text-align:center;padding:7px 0;border-radius:8px;border:1.5px solid}
+.lane.c{color:var(--cli);border-color:var(--cli)} .lane.s{color:var(--srv);border-color:var(--srv)}
+.lane small{display:block;font:500 11px var(--mono);color:var(--muted)}
+.status{display:flex;gap:14px;align-items:center;font-size:14px;color:var(--muted);padding:6px 10px;background:var(--sunken);border-radius:8px}
+.status .dot{width:10px;height:10px;border-radius:50%;background:var(--muted);display:inline-block;margin-right:6px;vertical-align:-1px}
+.status .open .dot{background:var(--ok);box-shadow:0 0 0 4px color-mix(in srgb,var(--ok) 25%,transparent)}
+.status b{color:var(--ink);font-family:var(--mono);font-weight:600}
+.timeline{position:relative;overflow:auto;min-height:0;border:1px solid var(--line);border-radius:8px;background:
+  linear-gradient(var(--line),var(--line)) calc(56px + 65px) 0/2px 100% no-repeat,
+  linear-gradient(var(--line),var(--line)) calc(100% - 65px) 0/2px 100% no-repeat, var(--sunken)}
+.ev{display:grid;grid-template-columns:56px 130px 1fr 130px;align-items:center;min-height:38px;animation:pop .35s ease-out}
+.ev .t{font:12px var(--mono);color:var(--muted);text-align:right;padding-right:8px;font-variant-numeric:tabular-nums}
+.ev .arrow{grid-column:2 / 5;margin:0 63px;position:relative;height:30px;display:flex;align-items:center}
+.ev .arrow::before{content:"";position:absolute;left:0;right:0;top:50%;border-top:2px solid var(--c)}
+.ev .arrow::after{content:"";position:absolute;top:50%;width:0;height:0;border:7px solid transparent;transform:translateY(-50%)}
+.ev.c .arrow{--c:var(--cli)} .ev.s .arrow{--c:var(--srv)}
+.ev.c .arrow::after{right:-6px;border-left-color:var(--c)}
+.ev.s .arrow::after{left:-6px;border-right-color:var(--c)}
+.ev .msg{position:relative;margin:0 auto;font:500 13px var(--mono);background:var(--surface);border:1.5px solid var(--c);color:var(--ink);border-radius:6px;padding:3px 9px;max-width:92%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ev.sys{grid-template-columns:56px 1fr}
+.ev.sys .m{font-size:13px;color:var(--muted);text-align:center;font-style:italic}
+.ev.sys.end .m{color:var(--ok);font-style:normal;font-weight:600}
+@keyframes pop{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:none}}
+
+/* ---------- view 2: bytes ---------- */
+#v-bytes{grid-template-columns:300px minmax(0,1fr)}
+.fieldrow{display:grid;grid-template-columns:auto 1fr;gap:8px;align-items:center}
+.fieldrow label{font:600 14px var(--mono);color:var(--c)}
+.fieldrow input{border:1.5px solid var(--line);border-left:4px solid var(--c);border-radius:6px;background:var(--sunken);padding:6px 9px;font:15px var(--mono);min-width:0}
+.c1{--c:var(--f1)} .c2{--c:var(--f2)} .c3{--c:var(--f3)} .c4{--c:var(--f4)} .c5{--c:var(--f5)} .cf{--c:var(--fr)}
+.bytes{display:flex;flex-wrap:wrap;gap:6px;align-content:flex-start}
+.b{font:600 17px var(--mono);width:46px;height:52px;border-radius:7px;border:2px solid var(--c);background:color-mix(in srgb,var(--c) 10%,var(--surface));color:var(--ink);cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;line-height:1.1;padding:0}
+.b small{font:500 10px var(--sans);color:var(--c);margin-top:3px}
+.b.tag{background:var(--c);color:var(--surface)} .b.tag small{color:var(--surface);opacity:.85}
+.b.sel{outline:3px solid var(--ink);outline-offset:2px}
+.b.omit{border-style:dashed;background:transparent;width:auto;padding:0 10px;font:500 12px var(--sans);color:var(--muted);cursor:default}
+.explain{border:1.5px solid var(--c,var(--line));border-radius:10px;padding:12px 14px;background:var(--sunken);display:grid;grid-template-columns:auto 1fr;gap:6px 18px;align-items:start;min-height:138px}
+.explain .big{font:700 40px var(--mono);line-height:1;color:var(--c)}
+.explain .bits{font:600 15px var(--mono);margin-top:6px;color:var(--muted);white-space:nowrap}
+.explain .bits i{font-style:normal;color:var(--c)}
+.explain h3{margin:0;font-size:17px}
+.explain p{margin:4px 0 0;font-size:15px;line-height:1.55}
+.cmp{display:grid;grid-template-columns:90px 1fr 70px;gap:4px 10px;align-items:center;font-size:14px}
+.cmp .bar{height:12px;border-radius:4px;background:var(--c)}
+.cmp .v{font:600 13px var(--mono);text-align:right}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:13px;color:var(--muted)}
+.legend span::before{content:"";display:inline-block;width:12px;height:12px;border-radius:3px;margin-right:5px;vertical-align:-2px;background:var(--c)}
+.legend .lt::before{background:var(--ink)} .legend .lv::before{background:transparent;border:2px solid var(--ink)}
+
+/* ---------- view 3: proto ---------- */
+#v-proto{grid-template-columns:330px minmax(0,1fr) 330px}
+#protoSrc{flex:1;min-height:0;resize:none;border:1.5px solid var(--line);border-radius:8px;background:var(--sunken);font:14px/1.6 var(--mono);padding:8px 10px}
+.perr{font-size:13px;color:var(--bad);min-height:20px}
+.perr.ok{color:var(--ok)}
+.form{display:flex;flex-direction:column;gap:7px}
+.frow{display:grid;grid-template-columns:150px 1fr;gap:8px;align-items:center}
+.frow label{font:13px var(--mono);color:var(--muted)}
+.frow label b{color:var(--c);font-weight:600}
+.frow input[type=text]{border:1.5px solid var(--line);border-left:4px solid var(--c);border-radius:6px;background:var(--sunken);padding:6px 9px;font:15px var(--mono);min-width:0}
+.frow input.bad{border-color:var(--bad);background:color-mix(in srgb,var(--bad) 8%,var(--sunken))}
+.frow .err{grid-column:2;font-size:12px;color:var(--bad);margin-top:-4px}
+.hexline{font:14px/1.9 var(--mono);word-break:break-all;background:var(--sunken);border-radius:8px;padding:8px 10px;min-height:44px}
+.hexline span{color:var(--c);font-weight:600}
+.block{background:color-mix(in srgb,var(--bad) 10%,var(--sunken));border:1px solid var(--bad);color:var(--bad);border-radius:8px;padding:8px 12px;font-size:14px}
+.block[hidden]{display:none}
+.srvproto{font:12.5px/1.55 var(--mono);background:var(--sunken);border-radius:8px;padding:8px 10px;white-space:pre;margin:0;overflow:auto}
+.dec{display:flex;flex-direction:column;gap:6px;overflow:auto;min-height:0;flex:1}
+.drow{border:1px solid var(--line);border-left:4px solid var(--c);border-radius:6px;padding:6px 10px;font-size:13.5px;background:var(--sunken)}
+.drow b{font-family:var(--mono)}
+.drow.ok{--c:var(--ok)} .drow.unk{--c:var(--warn)} .drow.bad{--c:var(--bad)} .drow.def{--c:var(--fr);color:var(--muted)}
+.drow .why{display:block;font-size:12.5px;color:var(--muted);margin-top:2px}
+.flash{animation:flash .6s ease-out}
+@keyframes flash{from{background:color-mix(in srgb,var(--acc) 25%,var(--surface))}to{background:var(--surface)}}
+
+/* ---------- view 4: mux ---------- */
+#v-mux{grid-template-rows:auto 1fr;grid-template-columns:1fr}
+.muxctl{display:flex;gap:22px;align-items:center;flex-wrap:wrap}
+.muxctl label{display:flex;gap:8px;align-items:center;font-size:14px;color:var(--muted)}
+.muxctl input[type=range]{width:150px;accent-color:var(--acc)}
+.muxctl b{font:600 15px var(--mono);color:var(--ink);min-width:5ch;font-variant-numeric:tabular-nums}
+.tracks{display:grid;grid-template-columns:1fr 1fr;gap:14px;min-height:0}
+.track{display:flex;flex-direction:column;gap:8px;min-height:0}
+.track h3{margin:0;font-size:17px;display:flex;justify-content:space-between;align-items:baseline}
+.track h3 span{font:600 14px var(--mono);color:var(--muted)}
+.track h3 span.done{color:var(--ink)}
+.gantt{position:relative;flex:1;min-height:0;display:flex;flex-direction:column;gap:5px;padding-top:4px}
+.grow{display:grid;grid-template-columns:74px 1fr;gap:8px;align-items:center;height:32px}
+.grow .nm{font:600 13px var(--mono);color:var(--c)}
+.gbar{position:relative;height:22px;background:var(--sunken);border-radius:3px}
+.seg{position:absolute;top:0;bottom:0;border-radius:3px}
+.seg.wait{background:repeating-linear-gradient(135deg,var(--line) 0 4px,transparent 4px 8px)}
+.seg.lat{background:color-mix(in srgb,var(--c) 30%,transparent)}
+.seg.tx{background:var(--c)}
+.wire{display:grid;grid-template-columns:74px 1fr;gap:8px;align-items:center;margin-top:6px}
+.wire .nm{font:600 12px var(--sans);color:var(--muted)}
+.strip{position:relative;height:30px;background:var(--sunken);border-radius:4px;overflow:hidden}
+.strip i{position:absolute;top:2px;bottom:2px;background:var(--c);border-radius:2px}
+.axis{display:grid;grid-template-columns:74px 1fr;gap:8px}
+.axis div{position:relative;height:16px;font:11px var(--mono);color:var(--muted)}
+.axis div span{position:absolute;transform:translateX(-50%);white-space:nowrap}
+.cover{position:absolute;top:0;bottom:0;right:0;background:var(--surface);pointer-events:none}
+.mlegend{display:flex;gap:16px;font-size:13px;color:var(--muted);align-items:center}
+.mlegend i{display:inline-block;width:22px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+@media (prefers-reduced-motion: reduce){.ev{animation:none}.flash{animation:none}}
+</style>
+</head>
+<body>
+
+
+<div class="viewport" id="vp">
+<div class="stage" id="stage">
+  <div class="top">
+    <div>
+      <div class="eyebrow">API 怎麼溝通 · 互動練習</div>
+      <h1>gRPC 操作台</h1>
+      <p class="lead" id="lead"></p>
+    </div>
+    <button class="btn-ghost" id="fs" type="button">全螢幕</button>
+  </div>
+
+  <div class="tabs" role="tablist">
+    <button class="tab" role="tab" id="tab-streams" data-v="streams" type="button">四種串流<small>stream</small></button>
+    <button class="tab" role="tab" id="tab-bytes" data-v="bytes" type="button">位元組拆解<small>protobuf</small></button>
+    <button class="tab" role="tab" id="tab-proto" data-v="proto" type="button">.proto 合約<small>contract</small></button>
+    <button class="tab" role="tab" id="tab-mux" data-v="mux" type="button">HTTP/2 多工<small>multiplexing</small></button>
+  </div>
+
+  <!-- ===== view 1 ===== -->
+  <section class="view" id="v-streams" hidden>
+    <div class="panel">
+      <div class="ph"><h2>選一種呼叫方式</h2></div>
+      <div class="modes" id="modes"></div>
+      <div class="ctrl"><button class="btn" id="play" type="button">開始呼叫</button><button class="btn sec" id="endStream" type="button" disabled>結束串流</button></div>
+      <div class="ctrl"><input id="chatIn" placeholder="雙向串流時，打字送給助教" disabled><button class="btn sec" id="chatSend" type="button" disabled>送出</button></div>
+      <div class="note" id="modeNote"></div>
+    </div>
+    <div class="panel seq">
+      <div class="status" id="sstat"></div>
+      <div class="seqhead"><span></span><div class="lane c">用戶端<small>你的 App</small></div><span></span><div class="lane s">伺服器<small>ScoreService</small></div></div>
+      <div class="timeline" id="tl"></div>
+    </div>
+  </section>
+
+  <!-- ===== view 2 ===== -->
+  <section class="view" id="v-bytes" hidden>
+    <div class="panel">
+      <div class="ph"><h2>Student 訊息</h2><span class="sub">改改看</span></div>
+      <div class="fieldrow c1"><label for="bf-id">id = 1</label><input id="bf-id" value="1" inputmode="numeric"></div>
+      <div class="fieldrow c2"><label for="bf-name">name = 2</label><input id="bf-name" value="小明"></div>
+      <div class="fieldrow c3"><label for="bf-grade">grade = 3</label><input id="bf-grade" value="2" inputmode="numeric"></div>
+      <div class="fieldrow c4"><label for="bf-class">class = 4</label><input id="bf-class" value="A"></div>
+      <div class="lbl">試試看</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px">
+        <button class="chip" type="button" id="bx-300">id 改成 300</button>
+        <button class="chip" type="button" id="bx-0">grade 改成 0</button>
+        <button class="chip" type="button" id="bx-en">name 改成 Ming</button>
+        <button class="chip" type="button" id="bx-reset">還原</button>
+      </div>
+      <div class="lbl">同樣的資料，大小比一比</div>
+      <div class="cmp" id="bcmp"></div>
+      <div class="note">JSON 每次都要寫出 <b>"name"</b> 這種欄位名稱；protobuf 只寫 <b>欄位編號</b>，名稱寫在雙方都有的 .proto 裡。</div>
+    </div>
+    <div class="panel">
+      <div class="ph"><h2>實際傳出去的位元組</h2><span class="sub" id="bcount"></span></div>
+      <div class="legend"><span class="cf">gRPC 訊框（前 5 bytes）</span><span class="c1">id</span><span class="c2">name</span><span class="c3">grade</span><span class="c4">class</span><span class="lt">實心 = 標籤（欄位編號 + 型別）</span></div>
+      <div class="bytes" id="bgrid"></div>
+      <div class="explain" id="bexp"></div>
+    </div>
+  </section>
+
+  <!-- ===== view 3 ===== -->
+  <section class="view" id="v-proto" hidden>
+    <div class="panel">
+      <div class="ph"><h2>用戶端的 .proto</h2><span class="sub">可以直接改</span></div>
+      <textarea id="protoSrc" spellcheck="false" aria-label="用戶端 .proto"></textarea>
+      <div class="perr" id="perr"></div>
+      <div class="lbl">試試看</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px">
+        <button class="chip" type="button" id="px-add">加新欄位 email = 5</button>
+        <button class="chip" type="button" id="px-rename">name 改名 nickname</button>
+        <button class="chip" type="button" id="px-type">grade 改成 string</button>
+        <button class="chip" type="button" id="px-reset">還原</button>
+      </div>
+    </div>
+    <div class="panel">
+      <div class="ph"><h2>依合約產生的表單</h2><span class="sub">型別錯了送不出去</span></div>
+      <div class="form" id="pform"></div>
+      <div class="block" id="pblock" hidden></div>
+      <div class="lbl">編碼後的位元組</div>
+      <div class="hexline" id="phex"></div>
+      <button class="btn" id="psend" type="button">送給伺服器</button>
+      <div class="note" id="pnote">gRPC 會依照 .proto <b>產生程式碼</b>，欄位型別寫錯在送出前就會被擋下。對照 JSON-RPC：什麼都送得出去，要等伺服器回 <b>-32602</b> 才知道錯了。</div>
+    </div>
+    <div class="panel">
+      <div class="ph"><h2>伺服器</h2><span class="sub">用的是原本那份合約</span></div>
+      <pre class="srvproto" id="srvproto"></pre>
+      <div class="lbl">伺服器讀到的內容</div>
+      <div class="dec" id="pdec"><div class="note">按「送給伺服器」看看伺服器怎麼解讀。</div></div>
+    </div>
+  </section>
+
+  <!-- ===== view 4 ===== -->
+  <section class="view" id="v-mux" hidden>
+    <div class="panel">
+      <div class="muxctl">
+        <label>同時呼叫 <input type="range" id="mxN" min="2" max="8" value="4"><b id="mxNv">4 個</b></label>
+        <label>網路來回延遲 <input type="range" id="mxL" min="50" max="400" step="25" value="200"><b id="mxLv">200 ms</b></label>
+        <button class="btn" id="mxGo" type="button">同時發出呼叫</button>
+        <div class="mlegend"><span><i style="background:repeating-linear-gradient(135deg,var(--line) 0 4px,transparent 4px 8px)"></i>排隊等待</span><span><i style="background:color-mix(in srgb,var(--acc) 30%,transparent)"></i>網路延遲</span><span><i style="background:var(--acc)"></i>傳送資料</span></div>
+      </div>
+    </div>
+    <div class="tracks">
+      <div class="panel track">
+        <h3>HTTP/1.1<span id="t1">—</span></h3>
+        <div class="gantt" id="g1"></div>
+        <div class="note">一條連線<b>一次只能跑一個請求</b>，後面的只好排隊。（瀏覽器最多開 6 條連線來緩解，但每條還是一次一個。）</div>
+      </div>
+      <div class="panel track">
+        <h3>HTTP/2（gRPC 用的）<span id="t2">—</span></h3>
+        <div class="gantt" id="g2"></div>
+        <div class="note">每個呼叫是一條 <b>stream</b>（編號 1、3、5…），切成小 <b>frame</b> 在同一條連線上交錯傳送。gRPC 的串流也是建立在這上面。</div>
+      </div>
+    </div>
+  </section>
+</div>
+</div>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const stage = $('stage'), vp = $('vp');
+  function fit(){ const s = Math.min(vp.clientWidth/1280, vp.clientHeight/720); stage.style.setProperty('--s', s > 0 ? s : 1); }
+  new ResizeObserver(fit).observe(vp); addEventListener('resize', fit); fit();
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  const te = new TextEncoder(), td = new TextDecoder();
+  const hx = b => b.toString(16).padStart(2, '0');
+
+  /* ================= protobuf helpers ================= */
+  function varint(n){ const o = []; n = Math.floor(n); while (n > 127){ o.push((n % 128) | 128); n = Math.floor(n / 128); } o.push(n); return o; }
+  const WT = { int32:0, bool:0, string:2 };
+  /* encode one field into labelled parts; returns null when proto3 omits it (default value) */
+  function encField(f, val){
+    const wt = WT[f.type];
+    if (f.type === 'string' && val === '') return null;
+    if ((f.type === 'int32') && val === 0) return null;
+    if (f.type === 'bool' && !val) return null;
+    const tag = varint(f.num * 8 + wt);
+    const parts = tag.map((b, i) => ({ b, role:'tag', i, n:tag.length }));
+    if (wt === 0){
+      const v = varint(f.type === 'bool' ? 1 : val);
+      v.forEach((b, i) => parts.push({ b, role:'vint', i, n:v.length, val }));
+    } else {
+      const bytes = [...te.encode(val)];
+      const len = varint(bytes.length);
+      len.forEach((b, i) => parts.push({ b, role:'len', i, n:len.length, len:bytes.length }));
+      let k = 0;
+      for (const ch of val){
+        const cb = [...te.encode(ch)];
+        cb.forEach((b, i) => parts.push({ b, role:'chr', ch, i, n:cb.length }));
+        k += cb.length;
+      }
+    }
+    return parts;
+  }
+  function decode(bytes){
+    const out = []; let p = 0;
+    const rv = () => { let r = 0, m = 1, b; do { b = bytes[p++]; r += (b & 127) * m; m *= 128; } while (b & 128 && p < bytes.length); return r; };
+    while (p < bytes.length){
+      const tag = rv(), num = Math.floor(tag / 8), wt = tag % 8;
+      if (wt === 0) out.push({ num, wt, value: rv() });
+      else if (wt === 2){ const L = rv(); const raw = bytes.slice(p, p + L); p += L; out.push({ num, wt, raw }); }
+      else { out.push({ num, wt, broken:true }); break; }
+    }
+    return out;
+  }
+
+  /* ================= tabs / routing ================= */
+  const LEADS = {
+    streams: '單次呼叫、伺服器串流、用戶端串流、雙向串流：看訊息在一條連線上怎麼來回。REST 和 JSON-RPC 都只有一問一答。',
+    bytes: '點任何一個 byte，看它代表什麼。這就是 gRPC 又小又快、但人看不懂的原因。',
+    proto: '.proto 是雙方事先講好的合約。改改看合約，看用戶端和伺服器會怎麼樣。',
+    mux: '同時發出好幾個呼叫：HTTP/1.1 要排隊，HTTP/2 可以在同一條連線上交錯傳送。'
+  };
+  const VIEWS = Object.keys(LEADS);
+  function show(){
+    const v = VIEWS.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'streams';
+    VIEWS.forEach(k => { $('v-' + k).hidden = k !== v; $('tab-' + k).setAttribute('aria-selected', k === v); });
+    $('lead').textContent = LEADS[v];
+    if (v === 'mux') mux.layout();
+  }
+  document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => {
+    if (location.hash !== '#' + t.dataset.v) location.hash = t.dataset.v; else show();
+  }));
+  addEventListener('hashchange', show);
+
+  /* ================= view 1: streams ================= */
+  const MODES = {
+    unary: { name:'單次呼叫 Unary', desc:'一問一答，跟 REST 一樣',
+      rpc:'rpc GetScore (StudentId) returns (Score);',
+      note:'送一個請求、收一個回應，跟 REST、JSON-RPC 的感覺一樣。',
+      script:[['c',0,'StudentId { id: 1 }'],['s',800,'Score { name: "小明", math: 88 }'],['end',1100]] },
+    server: { name:'伺服器串流', desc:'問一次，伺服器陸續推送',
+      rpc:'rpc WatchScores (ClassId) returns (<s>stream</s> ScoreUpdate);',
+      note:'像「即時成績看板」：問一次，伺服器有新成績就推過來。REST 只能每隔幾秒<b>一直重問</b>（輪詢）。',
+      script:[['c',0,'ClassId { class: "A" }'],['s',900,'ScoreUpdate { 小明 數學 88 }'],['s',1700,'ScoreUpdate { 阿凱 數學 92 }'],['s',2500,'ScoreUpdate { 小明 英文 79 }'],['s',3300,'ScoreUpdate { 阿凱 英文 85 }'],['s',4100,'ScoreUpdate { 小美 數學 95 }'],['end',4700]] },
+    client: { name:'用戶端串流', desc:'連續上傳很多筆，最後回一次',
+      rpc:'rpc UploadScores (<s>stream</s> Score) returns (Summary);',
+      note:'像「上傳全班成績」：一筆一筆送，送完伺服器回一份總結。不用先把全部資料湊成一個大請求。',
+      script:[['c',0,'Score { 小明 88 }'],['c',600,'Score { 小美 95 }'],['c',1200,'Score { 阿凱 92 }'],['c',1800,'Score { 怡君 76 }'],['c',2400,'Score { 志豪 70 }'],['sys',2900,'用戶端：資料送完了（half-close）'],['s',3500,'Summary { count: 5, average: 84.2 }'],['end',3800]] },
+    bidi: { name:'雙向串流', desc:'兩邊都能隨時傳，像聊天',
+      rpc:'rpc Chat (<s>stream</s> Msg) returns (<s>stream</s> Msg);',
+      note:'兩邊<b>各講各的、不用等對方</b>，像聊天室或線上遊戲。開始後可以在上面打字，結束時按「結束串流」。',
+      script:[['c',0,'小明：老師，作業幾號交？'],['s',900,'助教：下週一'],['s',1600,'助教：記得附上 .proto 檔'],['c',2100,'小明：好的！'],['c',2600,'小明：可以用 Python 寫嗎？'],['s',3300,'助教：可以，gRPC 支援很多語言']] }
+  };
+  let mode = 'server', run = null;
+  const fmtRpc = s => esc(s).replace(/&lt;s&gt;stream&lt;\/s&gt;/g, '<span class="stream-kw">stream</span>').replace(/^rpc/, '<span class="kw">rpc</span>').replace(/returns/, '<span class="kw">returns</span>');
+  $('modes').innerHTML = Object.entries(MODES).map(([k, m]) =>
+    `<button class="mode" type="button" id="m-${k}" data-k="${k}"><b>${m.name}</b><span>${m.desc}</span><code>${fmtRpc(m.rpc)}</code></button>`).join('');
+  function setMode(k){
+    stopRun(); mode = k;
+    document.querySelectorAll('.mode').forEach(b => b.setAttribute('aria-pressed', b.dataset.k === k));
+    $('modeNote').innerHTML = MODES[k].note;
+    $('tl').innerHTML = ''; counts = { c:0, s:0 }; setStatus('idle');
+    $('play').textContent = '開始呼叫';
+  }
+  let counts = { c:0, s:0 };
+  function setStatus(st){
+    const lbl = st === 'open' ? '<span class="open"><span class="dot"></span>HTTP/2 stream 開啟中</span>'
+      : st === 'done' ? '<span><span class="dot"></span>stream 已結束 · grpc-status: 0 (OK)</span>'
+      : '<span><span class="dot"></span>尚未開始</span>';
+    $('sstat').innerHTML = `${lbl}<span>用戶端送出 <b>${counts.c}</b> 則</span><span>伺服器送出 <b>${counts.s}</b> 則</span><span style="margin-left:auto">全程只用 <b>1</b> 條連線</span>`;
+  }
+  function addEv(kind, t, text){
+    const d = document.createElement('div');
+    if (kind === 'c' || kind === 's'){
+      counts[kind]++;
+      d.className = 'ev ' + kind;
+      d.innerHTML = `<span class="t">${(t/1000).toFixed(1)}s</span><div class="arrow"><span class="msg" title="${esc(text)}">${esc(text)}</span></div>`;
+    } else {
+      d.className = 'ev sys' + (kind === 'end' ? ' end' : '');
+      d.innerHTML = `<span class="t">${(t/1000).toFixed(1)}s</span><span class="m">${esc(text)}</span>`;
+    }
+    $('tl').appendChild(d); $('tl').scrollTop = $('tl').scrollHeight;
+    setStatus(kind === 'end' ? 'done' : 'open');
+  }
+  function stopRun(){ if (run){ run.timers.forEach(clearTimeout); run = null; } chatUI(false); $('endStream').disabled = true; }
+  function chatUI(on){ $('chatIn').disabled = !on; $('chatSend').disabled = !on; }
+  function finish(t){
+    if (!run) return;
+    run.timers.forEach(clearTimeout);
+    addEv('end', t ?? (performance.now() - run.t0), '串流結束 · grpc-status: 0 (OK)');
+    run = null; chatUI(false); $('endStream').disabled = true; $('play').textContent = '再跑一次';
+  }
+  function play(){
+    stopRun(); $('tl').innerHTML = ''; counts = { c:0, s:0 };
+    const m = MODES[mode], speed = reduce ? 0.25 : 1;
+    run = { t0: performance.now(), timers: [] };
+    addEv('sys', 0, '開啟一條 HTTP/2 stream：POST /school.ScoreService/' + m.rpc.match(/rpc (\w+)/)[1]);
+    m.script.forEach(([k, t, text]) => {
+      run.timers.push(setTimeout(() => {
+        if (k === 'end') finish(t);
+        else addEv(k, t, text);
+      }, t * speed + 200));
+    });
+    $('play').textContent = '重新開始';
+    if (mode === 'bidi'){ chatUI(true); $('endStream').disabled = false; }
+    if (mode === 'client') $('endStream').disabled = true;
+  }
+  const REPLIES = ['助教：收到，我看一下', '助教：好問題！', '助教：明天上課再講', '助教：沒問題'];
+  function chat(){
+    const v = $('chatIn').value.trim(); if (!v || !run) return;
+    const t = performance.now() - run.t0;
+    addEv('c', t, '小明：' + v); $('chatIn').value = '';
+    run.timers.push(setTimeout(() => { if (run) addEv('s', performance.now() - run.t0, REPLIES[counts.c % REPLIES.length]); }, 700));
+  }
+  $('modes').addEventListener('click', e => { const b = e.target.closest('.mode'); if (b) setMode(b.dataset.k); });
+  $('play').addEventListener('click', play);
+  $('endStream').addEventListener('click', () => run && finish());
+  $('chatSend').addEventListener('click', chat);
+  $('chatIn').addEventListener('keydown', e => { if (e.key === 'Enter'){ e.preventDefault(); chat(); } });
+  setMode('server');
+  /* start with a finished example on screen */
+  (() => { const m = MODES.server; addEv('sys', 0, '開啟一條 HTTP/2 stream：POST /school.ScoreService/WatchScores');
+    m.script.forEach(([k, t, text]) => k === 'end' ? addEv('end', t, '串流結束 · grpc-status: 0 (OK)') : addEv(k, t, text));
+    $('play').textContent = '再跑一次'; })();
+
+  /* ================= view 2: bytes ================= */
+  const BSCHEMA = [ {num:1,name:'id',type:'int32'}, {num:2,name:'name',type:'string'}, {num:3,name:'grade',type:'int32'}, {num:4,name:'class',type:'string'} ];
+  let bsel = 5, bparts = [];
+  function readB(){
+    const n = s => { const v = parseInt(s, 10); return isFinite(v) && v >= 0 ? Math.min(v, 2147483647) : 0; };
+    return { id: n($('bf-id').value), name: $('bf-name').value, grade: n($('bf-grade').value), class: $('bf-class').value };
+  }
+  function renderBytes(){
+    const v = readB(); bparts = []; const omitted = [];
+    BSCHEMA.forEach(f => {
+      const ps = encField(f, v[f.name]);
+      if (!ps) omitted.push(f); else ps.forEach(p => bparts.push({ ...p, f }));
+    });
+    const L = bparts.length;
+    const frame = [0, (L>>>24)&255, (L>>>16)&255, (L>>>8)&255, L&255].map((b, i) => ({ b, role: i ? 'flen' : 'flag', i, L }));
+    bparts = [...frame, ...bparts];
+    if (bsel >= bparts.length) bsel = 5 < bparts.length ? 5 : 0;
+    const roleLbl = p => p.role === 'tag' ? '標籤' : p.role === 'vint' ? '數值' : p.role === 'len' ? '長度' : p.role === 'chr' ? (p.ch.length && p.n > 1 ? p.ch : p.ch) : p.role === 'flag' ? '壓縮' : '長度';
+    $('bgrid').innerHTML = bparts.map((p, i) => {
+      const c = p.f ? 'c' + p.f.num : 'cf';
+      return `<button class="b ${c} ${p.role === 'tag' ? 'tag' : ''} ${i === bsel ? 'sel' : ''}" type="button" data-i="${i}" aria-label="第 ${i + 1} 個 byte">${hx(p.b)}<small>${esc(roleLbl(p))}</small></button>`;
+    }).join('') + omitted.map(f => `<span class="b omit">${f.name} 是預設值，整個省略不傳</span>`).join('');
+    $('bcount').textContent = `訊框 5 + 內容 ${L} = 共 ${L + 5} bytes`;
+    const json = te.encode(JSON.stringify(v)).length;
+    const mx = Math.max(json, L + 5);
+    $('bcmp').innerHTML = `<span>JSON</span><div class="bar" style="--c:var(--f2);width:${json / mx * 100}%"></div><span class="v">${json} B</span>`
+      + `<span>gRPC</span><div class="bar" style="--c:var(--acc);width:${(L + 5) / mx * 100}%"></div><span class="v">${L + 5} B</span>`;
+    explainByte();
+  }
+  function bits(b){ return b.toString(2).padStart(8, '0'); }
+  function explainByte(){
+    const p = bparts[bsel]; if (!p) return;
+    const c = p.f ? `var(--f${p.f.num})` : 'var(--fr)';
+    const box = $('bexp'); box.style.setProperty('--c', c);
+    let h = '', t = '', bitsHtml = `<div class="bits">${bits(p.b)}</div>`;
+    if (p.role === 'flag'){ h = 'gRPC 訊框：壓縮旗標'; t = '每則 gRPC 訊息前面都有 5 bytes 的訊框。第 1 個 byte 是 0，代表<b>沒有壓縮</b>。'; }
+    else if (p.role === 'flen'){ h = 'gRPC 訊框：訊息長度'; t = `第 2～5 個 byte 合起來是後面內容的長度：<b>${p.L} bytes</b>。接收方先讀這 4 個 byte，就知道要再讀多少。`; }
+    else if (p.role === 'tag'){
+      const s = bits(p.b);
+      bitsHtml = `<div class="bits"><i>${s.slice(0,5)}</i> ${s.slice(5)}</div>`;
+      h = `標籤：第 ${p.f.num} 號欄位（${p.f.name}）`;
+      t = `這個 byte = 欄位編號 × 8 + 型別。前 5 bits <b>${s.slice(0,5)}</b> = ${p.f.num} 號欄位；後 3 bits <b>${s.slice(5)}</b> = 型別 ${WT[p.f.type]}（${WT[p.f.type] ? '後面接「長度＋內容」' : 'varint 整數'}）。<br>注意：這裡<b>沒有寫 "${p.f.name}" 這個名字</b>，只有編號。`;
+    }
+    else if (p.role === 'vint'){
+      h = `數值：${p.f.name} = ${p.val}`;
+      t = p.n === 1 ? `小於 128 的整數只要 <b>1 個 byte</b>。JSON 裡的數字是一個字一個字寫的文字。`
+        : `varint 編碼：每個 byte 只用 7 bits 存數字，最前面那個 bit 是 1 表示「後面還有」。${p.val} 需要 <b>${p.n} 個 byte</b>（這是第 ${p.i + 1} 個）。`;
+    }
+    else if (p.role === 'len'){ h = `長度：後面 ${p.len} bytes 是 ${p.f.name}`; t = `字串前面先寫長度，接收方就知道要讀到哪裡為止。不需要引號，也不需要逗號。`; }
+    else if (p.role === 'chr'){
+      h = `「${esc(p.ch)}」的 UTF-8 編碼`;
+      t = p.n === 1 ? `英文字母和數字在 UTF-8 裡只要 <b>1 個 byte</b>。` : `中文字在 UTF-8 裡要 <b>${p.n} 個 byte</b>，這是第 ${p.i + 1} 個。所以「小明」兩個字佔 6 bytes。`;
+    }
+    box.innerHTML = `<div><div class="big">${hx(p.b)}</div>${bitsHtml}</div><div><h3>${h}</h3><p>${t}</p></div>`;
+  }
+  $('bgrid').addEventListener('click', e => { const b = e.target.closest('.b[data-i]'); if (!b) return; bsel = +b.dataset.i; renderBytes(); });
+  ['bf-id','bf-name','bf-grade','bf-class'].forEach(id => $(id).addEventListener('input', renderBytes));
+  const setB = (id, v) => { $(id).value = v; };
+  $('bx-300').addEventListener('click', () => { setB('bf-id', '300'); bsel = 6; renderBytes(); });
+  $('bx-0').addEventListener('click', () => { setB('bf-grade', '0'); renderBytes(); });
+  $('bx-en').addEventListener('click', () => { setB('bf-name', 'Ming'); bsel = 9; renderBytes(); });
+  $('bx-reset').addEventListener('click', () => { setB('bf-id','1'); setB('bf-name','小明'); setB('bf-grade','2'); setB('bf-class','A'); bsel = 5; renderBytes(); });
+  renderBytes();
+
+  /* ================= view 3: proto ================= */
+  const PROTO0 = 'message Student {\n  int32  id    = 1;\n  string name  = 2;\n  int32  grade = 3;\n  string class = 4;\n}';
+  const SRV = [ {num:1,name:'id',type:'int32'}, {num:2,name:'name',type:'string'}, {num:3,name:'grade',type:'int32'}, {num:4,name:'class',type:'string'} ];
+  const SAMPLE = { id:'1', name:'小明', nickname:'小明', grade:'2', class:'A', email:'ming@school.tw' };
+  let pschema = [], pvals = {};
+  const hlProto = src => esc(src).replace(/\b(message|repeated)\b/g, '<span class="kw">$1</span>').replace(/\b(int32|string|bool)\b/g, '<span class="ty">$1</span>').replace(/= (\d+)/g, '= <span class="nu">$1</span>');
+  $('srvproto').innerHTML = hlProto(PROTO0);
+  function parseProto(src){
+    const lines = src.split('\n'), fields = [], errs = [];
+    lines.forEach((ln, i) => {
+      const s = ln.replace(/\/\/.*$/, '').trim();
+      if (!s || /^message\s+\w+\s*\{$/.test(s) || s === '}') return;
+      const m = s.match(/^(\w+)\s+(\w+)\s*=\s*(\d+)\s*;$/);
+      if (!m){ errs.push(`第 ${i + 1} 行看不懂：「${s}」（格式：型別 名稱 = 編號;）`); return; }
+      const [, type, name, num] = m;
+      if (!(type in WT)){ errs.push(`第 ${i + 1} 行：不認得型別 ${type}（這個示範支援 int32、string、bool）`); return; }
+      if (fields.some(f => f.num === +num)){ errs.push(`第 ${i + 1} 行：編號 ${num} 重複了，每個欄位的編號要不一樣`); return; }
+      if (fields.some(f => f.name === name)){ errs.push(`第 ${i + 1} 行：欄位名稱 ${name} 重複了`); return; }
+      fields.push({ type, name, num:+num });
+    });
+    return { fields, errs };
+  }
+  function buildForm(){
+    const { fields, errs } = parseProto($('protoSrc').value);
+    $('perr').className = 'perr' + (errs.length ? '' : ' ok');
+    $('perr').textContent = errs.length ? errs[0] : `合約 OK：${fields.length} 個欄位`;
+    pschema = fields;
+    $('pform').innerHTML = fields.map(f => {
+      const c = 'c' + Math.min(f.num, 5);
+      const v = f.name in pvals ? pvals[f.name] : (SAMPLE[f.name] ?? (f.type === 'int32' ? '0' : ''));
+      pvals[f.name] = v;
+      const input = f.type === 'bool'
+        ? `<input type="checkbox" id="pf-${f.name}" data-n="${f.name}" ${v === true ? 'checked' : ''}>`
+        : `<input type="text" id="pf-${f.name}" data-n="${f.name}" value="${esc(v)}">`;
+      return `<div class="frow ${c}"><label for="pf-${f.name}"><span class="ty">${f.type}</span> <b>${f.name}</b> = ${f.num}</label>${input}<span class="err" id="pe-${f.name}"></span></div>`;
+    }).join('');
+    encodeProto();
+  }
+  function encodeProto(){
+    const problems = [];
+    let all = [];
+    const segs = [];
+    pschema.forEach(f => {
+      let v = pvals[f.name];
+      const errEl = $('pe-' + f.name), inp = $('pf-' + f.name);
+      if (errEl) errEl.textContent = '';
+      if (inp) inp.classList.remove('bad');
+      if (f.type === 'int32'){
+        const s = String(v).trim();
+        if (!/^\d+$/.test(s)){ problems.push(`${f.name} 必須是整數（int32），你填的是「${s}」`); if (errEl) errEl.textContent = '要填整數'; if (inp) inp.classList.add('bad'); return; }
+        v = Math.min(+s, 2147483647);
+      }
+      if (f.type === 'bool') v = !!v;
+      const ps = encField(f, v);
+      if (ps){ const b = ps.map(p => p.b); all = all.concat(b); segs.push({ c:'c' + Math.min(f.num, 5), b }); }
+    });
+    const parseBad = $('perr').className === 'perr';
+    $('pblock').hidden = !problems.length;
+    $('pblock').innerHTML = problems.length ? '送不出去：' + esc(problems[0]) + '。<br>產生的程式碼在送出前就擋下了，伺服器根本收不到。' : '';
+    $('psend').disabled = !!problems.length || parseBad || !pschema.length;
+    $('phex').innerHTML = segs.length ? segs.map(s => `<span class="${s.c}">${s.b.map(hx).join(' ')}</span>`).join(' ') : '<span class="cf">（沒有資料，全部是預設值）</span>';
+    return all;
+  }
+  function sendProto(){
+    const bytes = encodeProto();
+    const got = decode(bytes), seen = new Set();
+    const rows = got.map(g => {
+      const sf = SRV.find(f => f.num === g.num);
+      if (g.broken) return `<div class="drow bad"><b>無法解讀</b><span class="why">位元組格式壞掉了。</span></div>`;
+      if (!sf){
+        const shown = g.wt === 2 ? `"${esc(td.decode(new Uint8Array(g.raw)))}"` : g.value;
+        return `<div class="drow unk"><b>#${g.num}：未知欄位</b> = ${shown}<span class="why">伺服器的合約裡沒有 ${g.num} 號欄位：直接<b>略過</b>，其他欄位照常運作。所以新增欄位不會弄壞舊伺服器。</span></div>`;
+      }
+      seen.add(sf.num);
+      if (WT[sf.type] !== g.wt){
+        return `<div class="drow bad"><b>#${g.num} ${sf.name}：型別對不上！</b><span class="why">伺服器認為 ${sf.name} 是 ${sf.type}，收到的卻是${g.wt === 2 ? '「長度＋內容」（字串）' : '整數'}。雙方合約不一致，這個欄位讀不出來。</span></div>`;
+      }
+      const val = g.wt === 2 ? `"${esc(td.decode(new Uint8Array(g.raw)))}"` : g.value;
+      const cname = pschema.find(f => f.num === g.num);
+      const renamed = cname && cname.name !== sf.name ? `<span class="why">用戶端叫它 <b>${cname.name}</b>，伺服器叫它 <b>${sf.name}</b>，照樣對得上：傳輸時只看<b>編號</b>，不看名稱。</span>` : '';
+      return `<div class="drow ok"><b>#${g.num} ${sf.name}</b> = ${val}${renamed}</div>`;
+    });
+    SRV.filter(f => !seen.has(f.num) && !got.some(g => g.num === f.num)).forEach(f => {
+      rows.push(`<div class="drow def"><b>#${f.num} ${f.name}</b>：沒收到 → 用預設值 ${f.type === 'string' ? '""' : '0'}</div>`);
+    });
+    const dec = $('pdec');
+    dec.innerHTML = `<div class="note">收到 <b>${bytes.length} bytes</b>，照伺服器自己的 .proto 一個一個解讀：</div>` + rows.join('');
+    dec.classList.remove('flash'); void dec.offsetWidth; dec.classList.add('flash');
+  }
+  $('protoSrc').addEventListener('input', buildForm);
+  $('pform').addEventListener('input', e => {
+    const n = e.target.dataset.n; if (!n) return;
+    pvals[n] = e.target.type === 'checkbox' ? e.target.checked : e.target.value;
+    encodeProto();
+  });
+  $('psend').addEventListener('click', sendProto);
+  const setProto = s => { $('protoSrc').value = s; buildForm(); $('pdec').innerHTML = '<div class="note">合約改了，按「送給伺服器」看看伺服器怎麼解讀。</div>'; };
+  $('px-add').addEventListener('click', () => { pvals = {}; setProto(PROTO0.replace('\n}', '\n  string email = 5;\n}')); });
+  $('px-rename').addEventListener('click', () => { pvals = {}; setProto(PROTO0.replace('string name  = 2;', 'string nickname = 2;')); });
+  $('px-type').addEventListener('click', () => { pvals.grade = '二年級'; setProto(PROTO0.replace('int32  grade = 3;', 'string grade = 3;')); });
+  $('px-reset').addEventListener('click', () => { pvals = {}; setProto(PROTO0); });
+  $('protoSrc').value = PROTO0; buildForm();
+
+  /* ================= view 4: HTTP/2 multiplexing ================= */
+  const mux = (() => {
+    const SIZES = [220, 140, 260, 180, 120, 240, 160, 200]; /* ms of data transfer per call */
+    const FRAME = 20; /* ms per frame slice */
+    let anim = null, last = null;
+    function sim(n, L){
+      /* HTTP/1.1: one connection, strictly one after another */
+      let t = 0; const h1 = [], s1 = [];
+      for (let i = 0; i < n; i++){
+        const st = t; t += L / 2; const tx0 = t; t += SIZES[i]; t += L / 2;
+        h1.push({ wait: st, lat0: st, tx0, tx1: tx0 + SIZES[i], end: t });
+        s1.push({ i, a: tx0, b: tx0 + SIZES[i] });
+      }
+      /* HTTP/2: all start at once, frames round-robin on one connection */
+      const left = SIZES.slice(0, n).slice(), h2 = SIZES.slice(0, n).map(() => ({ wait:0, lat0:0, tx0:L / 2, tx1:0, end:0 })), s2 = [];
+      let tt = L / 2, k = 0;
+      while (left.some(x => x > 0)){
+        if (left[k] > 0){ const d = Math.min(FRAME, left[k]); s2.push({ i:k, a:tt, b:tt + d }); tt += d; left[k] -= d; if (left[k] <= 0){ h2[k].tx1 = tt; h2[k].end = tt + L / 2; } }
+        k = (k + 1) % n;
+      }
+      return { h1, s1, h2, s2, T1: t, T2: Math.max(...h2.map(x => x.end)) };
+    }
+    const COLORS = ['var(--f1)','var(--f2)','var(--f3)','var(--f4)','var(--f5)','var(--cli)','var(--bad)','var(--fr)'];
+    function draw(el, rows, strip, T, two){
+      const pct = x => (x / T * 100).toFixed(2) + '%';
+      const ticks = [];
+      const step = T > 2000 ? 500 : T > 1000 ? 250 : 100;
+      for (let x = 0; x <= T; x += step) ticks.push(`<span style="left:${pct(x)}">${(x / 1000).toFixed(2)}s</span>`);
+      el.innerHTML = rows.map((r, i) => `<div class="grow" style="--c:${COLORS[i]}"><span class="nm">${two ? 'stream ' + (2 * i + 1) : '呼叫 ' + (i + 1)}</span><div class="gbar">`
+        + (r.lat0 > 0 ? `<div class="seg wait" style="left:0;width:${pct(r.lat0)}"></div>` : '')
+        + `<div class="seg lat" style="left:${pct(r.lat0)};width:${pct(r.tx0 - r.lat0)}"></div>`
+        + (two ? strip.filter(s => s.i === i).map(s => `<div class="seg tx" style="left:${pct(s.a)};width:${pct(s.b - s.a)}"></div>`).join('')
+               : `<div class="seg tx" style="left:${pct(r.tx0)};width:${pct(r.tx1 - r.tx0)}"></div>`)
+        + `<div class="seg lat" style="left:${pct(r.tx1)};width:${pct(r.end - r.tx1)}"></div>`
+        + `</div></div>`).join('')
+        + `<div class="wire"><span class="nm">連線上的資料</span><div class="strip">${strip.map(s => `<i style="--c:${COLORS[s.i]};left:${pct(s.a)};width:calc(${pct(s.b - s.a)} - 1px)"></i>`).join('')}</div></div>`
+        + `<div class="axis"><span></span><div>${ticks.join('')}</div></div>`
+        + `<div class="cover" style="width:calc(100% - 82px)"></div>`;
+    }
+    function layout(play){
+      const n = +$('mxN').value, L = +$('mxL').value;
+      $('mxNv').textContent = n + ' 個'; $('mxLv').textContent = L + ' ms';
+      const r = sim(n, L), T = Math.max(r.T1, r.T2) * 1.04;
+      draw($('g1'), r.h1, r.s1, T, false);
+      draw($('g2'), r.h2, r.s2, T, true);
+      last = { r, T };
+      if (anim) cancelAnimationFrame(anim);
+      const c1 = $('g1').querySelector('.cover'), c2 = $('g2').querySelector('.cover');
+      const done = () => {
+        c1.style.width = c2.style.width = '0';
+        $('t1').textContent = `全部完成 ${(r.T1 / 1000).toFixed(2)} s`; $('t1').className = 'done';
+        $('t2').textContent = `全部完成 ${(r.T2 / 1000).toFixed(2)} s`; $('t2').className = 'done';
+      };
+      if (!play || reduce){ done(); return; }
+      $('t1').textContent = '傳送中…'; $('t2').textContent = '傳送中…'; $('t1').className = $('t2').className = '';
+      const total = 2600, t0 = performance.now();
+      const step = now => {
+        const k = Math.min(1, (now - t0) / total), w = (1 - k) * 100;
+        const trackW = c1.parentElement.clientWidth - 74 - 8;
+        c1.style.width = c2.style.width = (trackW * (1 - k)) + 'px';
+        const simT = k * T;
+        if (simT >= r.T2 && $('t2').className !== 'done'){ $('t2').textContent = `全部完成 ${(r.T2 / 1000).toFixed(2)} s`; $('t2').className = 'done'; }
+        if (simT >= r.T1 && $('t1').className !== 'done'){ $('t1').textContent = `全部完成 ${(r.T1 / 1000).toFixed(2)} s`; $('t1').className = 'done'; }
+        if (k < 1) anim = requestAnimationFrame(step); else done();
+      };
+      anim = requestAnimationFrame(step);
+    }
+    $('mxN').addEventListener('input', () => layout(false));
+    $('mxL').addEventListener('input', () => layout(false));
+    $('mxGo').addEventListener('click', () => layout(true));
+    return { layout: () => layout(false) };
+  })();
+
+  /* ================= misc ================= */
+  const fsBtn = $('fs');
+  fsBtn.addEventListener('click', async () => {
+    try { if (document.fullscreenElement) await document.exitFullscreen(); else await document.documentElement.requestFullscreen(); }
+    catch (e) { fsBtn.textContent = '無法全螢幕'; setTimeout(() => fsBtn.textContent = '全螢幕', 1600); }
+  });
+  document.addEventListener('fullscreenchange', () => { fsBtn.textContent = document.fullscreenElement ? '結束全螢幕' : '全螢幕'; fit(); });
+  show();
+})();
+</script>
+
+</body>
+</html>
