@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Cookie 登入示範</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=LXGW+WenKai+TC:wght@400;700&family=Patrick+Hand&display=swap">
+<style>
+/* Hand-drawn look matching the HTTP deck (Excalidraw palette). Deliberately single light theme: these pages sit on white slides. */
+:root{
+  --paper:#ffffff; --ink:#1e1e1e; --muted:#6c757d; --line:#ced4da; --soft:#f8f9fa;
+  --blue:#1971c2; --blue-bg:#e7f5ff; --blue-hatch:rgba(25,113,194,.32);
+  --yellow:#e67700; --yellow-bg:#fff9db; --yellow-hatch:rgba(240,140,0,.38);
+  --orange:#e8590c; --orange-bg:#fff4e6;
+  --green:#2f9e44; --green-bg:#ebfbee;
+  --red:#e03131; --red-bg:#fff5f5;
+  --pink:#c2255c; --pink-bg:#fff0f6;
+  --violet:#6741d9; --violet-bg:#f3f0ff;
+  --hand:"Patrick Hand","LXGW WenKai TC","Kaiti TC","STKaiti","BiauKai","KaiTi",cursive;
+  color-scheme:light;
+}
+html,body{height:100%}
+body{margin:0;box-sizing:border-box;background:var(--paper);color:var(--ink);font-family:var(--hand);overflow:hidden;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0}
+*,*::before,*::after{box-sizing:border-box}
+.viewport{position:relative;width:100%;height:100%;overflow:hidden}
+.stage{position:absolute;left:50%;top:0;width:1280px;height:720px;transform:translateX(-50%) scale(var(--s,1));transform-origin:top center;
+  padding:14px 10px;font-size:19px;line-height:1.45}
+button,input,select,textarea{font:inherit;color:inherit}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px dashed var(--blue);outline-offset:3px}
+
+.top{display:flex;justify-content:space-between;align-items:flex-end;gap:20px;margin-bottom:10px}
+h1{font-size:42px;margin:0;font-weight:400;line-height:1.05}
+.sub{color:var(--green);font-size:22px;margin-top:2px}
+.sk{border:2px solid var(--ink);border-radius:14px 5px 12px 6px/6px 12px 5px 14px;background:var(--paper)}
+.sk.thin{border-width:1.5px}
+.sk.dash{border-style:dashed}
+.hatch-blue{background:repeating-linear-gradient(45deg,var(--blue-hatch) 0 1.3px,transparent 1.3px 7px),repeating-linear-gradient(-45deg,var(--blue-hatch) 0 1.3px,transparent 1.3px 7px),var(--blue-bg)}
+.hatch-yellow{background:repeating-linear-gradient(45deg,var(--yellow-hatch) 0 1.3px,transparent 1.3px 7px),repeating-linear-gradient(-45deg,var(--yellow-hatch) 0 1.3px,transparent 1.3px 7px),var(--yellow-bg)}
+.btn{font-size:19px;padding:5px 16px;background:var(--paper);border:2px solid var(--ink);border-radius:12px 4px 10px 5px/5px 10px 4px 12px;cursor:pointer;box-shadow:2px 3px 0 var(--ink);white-space:nowrap}
+.btn:hover{background:var(--soft)}
+.btn:active{transform:translate(1px,2px);box-shadow:1px 1px 0 var(--ink)}
+.btn.pri{background:var(--ink);color:var(--paper)}
+.btn.pri:hover{background:#343a40}
+.btn:disabled{opacity:.35;cursor:not-allowed;box-shadow:none;transform:none}
+.btn.small{font-size:16px;padding:2px 10px;box-shadow:1px 2px 0 var(--ink)}
+.tools{display:flex;gap:10px;align-items:center}
+.label{font-size:16px;color:var(--muted)}
+.code{font-family:var(--hand);white-space:pre-wrap;word-break:break-word;line-height:1.5}
+.c-blue{color:var(--blue)} .c-green{color:var(--green)} .c-orange{color:var(--orange)} .c-red{color:var(--red)} .c-pink{color:var(--pink)} .c-yellow{color:var(--yellow)} .c-violet{color:var(--violet)} .c-muted{color:var(--muted)}
+mark.hl{background:linear-gradient(transparent 55%,#ffec99 55%);color:inherit;padding:0 2px}
+@keyframes wob{0%,100%{transform:rotate(-.6deg)}50%{transform:rotate(.6deg)}}
+@keyframes popin{from{opacity:0;transform:translateY(6px) scale(.98)}to{opacity:1;transform:none}}
+.pop{animation:popin .35s ease-out}
+@media (prefers-reduced-motion: reduce){.pop{animation:none}}
+
+/* Layout: browser (left) — messages on the wire (middle) — server with its session notebook (right) */
+.main{display:grid;grid-template-columns:360px 1fr 360px;gap:14px;height:604px}
+.col{display:flex;flex-direction:column;gap:10px;min-height:0}
+.who{padding:6px 12px;text-align:center;font-size:24px}
+.page{padding:10px 14px;min-height:120px}
+.page .site{font-size:15px;color:var(--muted);border-bottom:1.5px dashed var(--line);padding-bottom:4px;margin-bottom:6px;display:flex;justify-content:space-between}
+.page p{margin:0;font-size:20px}
+.page ul{margin:4px 0 0;padding-left:22px;font-size:18px}
+.acts{display:flex;flex-direction:column;gap:8px}
+.acts .btn{text-align:left;display:flex;justify-content:space-between;gap:8px}
+.acts .btn small{font-size:15px;color:var(--muted)}
+.acts .btn.warn{border-color:var(--red);color:var(--red);box-shadow:2px 3px 0 var(--red)}
+.jar{padding:8px 14px;flex:1;min-height:0}
+.jar h3,.note h3{margin:0 0 4px;font-size:20px;font-weight:400}
+.cookie{display:inline-flex;gap:6px;align-items:center;font-size:19px;padding:2px 12px;border:1.5px solid var(--yellow);border-radius:999px 700px 900px 800px;background:var(--yellow-bg)}
+.empty{color:var(--muted);font-size:17px}
+.wire{display:flex;flex-direction:column;gap:8px;min-height:0}
+.msg{padding:8px 14px;position:relative}
+.msg .h{display:flex;justify-content:space-between;font-size:18px;margin-bottom:2px}
+.msg .h span{font-size:15px;color:var(--muted)}
+.msg .code{font-size:18px}
+.msg.req{border-color:var(--green)} .msg.res{border-color:var(--blue)}
+.arrow svg{width:100%;height:34px;display:block}
+.nocookie{color:var(--red)}
+mark.ck{background:linear-gradient(transparent 50%,#ffec99 50%);color:var(--ink)}
+mark.set{background:linear-gradient(transparent 50%,#b2f2bb 50%);color:var(--ink)}
+.think{padding:10px 14px;font-size:19px;background:var(--yellow-bg);position:relative;min-height:96px}
+.think::before{content:"伺服器心想";display:block;font-size:14px;color:var(--yellow)}
+.note{padding:8px 14px;flex:1;min-height:0;overflow:auto}
+table{width:100%;border-collapse:collapse;font-size:18px}
+th{font-weight:400;color:var(--muted);font-size:15px;text-align:left;border-bottom:1.5px solid var(--ink)}
+td{border-bottom:1px dashed var(--line);padding:3px 2px;vertical-align:top}
+tr.hit td{background:var(--yellow-bg)}
+.tip{font-size:16px;color:var(--muted)}
+.hint{font-size:17px;color:var(--green);text-align:center}
+.log{padding:6px 14px;flex:1;min-height:0;overflow:auto}
+.log h3{margin:0 0 2px;font-size:18px;font-weight:400}
+.log div div{display:grid;grid-template-columns:120px 1fr 54px;gap:8px;font-size:16px;border-bottom:1px dashed var(--line);padding:1px 0}
+.log .ok{color:var(--green)} .log .bad{color:var(--orange)}
+</style>
+</head>
+<body>
+
+
+<div class="viewport" id="vp">
+<div class="stage" id="stage">
+  <div class="top">
+    <div><h1>伺服器記性不好：Cookie</h1><div class="sub">HTTP 是無狀態的：伺服器每次只看眼前這個請求。靠 Cookie，它才認得出你。</div></div>
+    <div class="tools"><button class="btn small" id="reset" type="button">重來</button><button class="btn small" id="fs" type="button">全螢幕</button></div>
+  </div>
+  <div class="main">
+    <section class="col" aria-label="瀏覽器">
+      <div class="who sk hatch-blue">瀏覽器</div>
+      <div class="page sk"><div class="site"><span>小書店 bookshop.tw</span><span id="pageUrl">/cart</span></div><div id="pageBody"></div></div>
+      <div class="acts">
+        <button class="btn" type="button" id="a-cart">看購物車 <small>GET /cart</small></button>
+        <button class="btn" type="button" id="a-login">以「小明」登入 <small>POST /login</small></button>
+        <button class="btn" type="button" id="a-add">把一本書加入購物車 <small>POST /cart</small></button>
+        <button class="btn" type="button" id="a-logout">登出 <small>POST /logout</small></button>
+        <button class="btn warn" type="button" id="a-clear">清除這個網站的 Cookie <small>不送請求</small></button>
+      </div>
+      <div class="jar sk dash"><h3>Cookie 罐子</h3><div id="jar"></div><div class="tip" style="margin-top:4px">之後每個送往 bookshop.tw 的請求，瀏覽器都會自動帶上。</div></div>
+    </section>
+
+    <section class="col wire" aria-label="網路上的訊息" aria-live="polite">
+      <div class="msg req sk" id="req"></div>
+      <div class="arrow" id="arrow"></div>
+      <div class="msg res sk" id="res"></div>
+      <div class="log sk dash"><h3>請求紀錄</h3><div id="log"></div></div>
+      <div class="hint" id="hint">試試看：看購物車 → 登入 → 再看購物車 → 清除 Cookie → 再看一次</div>
+    </section>
+
+    <section class="col" aria-label="伺服器">
+      <div class="who sk hatch-yellow">伺服器</div>
+      <div class="think sk" id="think"></div>
+      <div class="note sk"><h3>伺服器的記事本（Session）</h3>
+        <table><thead><tr><th>Cookie 編號</th><th>是誰</th><th>購物車</th></tr></thead><tbody id="sess"></tbody></table>
+        <div class="tip" style="margin-top:6px">伺服器只記「編號 → 是誰」。編號寫在 Cookie 裡交給瀏覽器保管。</div>
+      </div>
+    </section>
+  </div>
+</div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+const REDUCE = matchMedia('(prefers-reduced-motion: reduce)').matches;
+(() => {
+  const st = $('stage'), vp = $('vp');
+  const fit = () => { const s = Math.min(vp.clientWidth / 1280, vp.clientHeight / 720); st.style.setProperty('--s', s > 0 ? s : 1); };
+  new ResizeObserver(fit).observe(vp); addEventListener('resize', fit); fit();
+  const fs = $('fs');
+  if (fs){
+    fs.addEventListener('click', async () => {
+      try { if (document.fullscreenElement) await document.exitFullscreen(); else await document.documentElement.requestFullscreen(); }
+      catch (e) { fs.textContent = '無法全螢幕'; setTimeout(() => fs.textContent = '全螢幕', 1600); }
+    });
+    document.addEventListener('fullscreenchange', () => { fs.textContent = document.fullscreenElement ? '結束全螢幕' : '全螢幕'; fit(); });
+  }
+})();
+
+/* ---- tiny "rough" sketch helpers: stable jitter per seed ---- */
+function Rnd(seed){ let s = Math.abs(Math.floor(seed)) % 2147483647 || 1; return () => (s = s * 16807 % 2147483647) / 2147483647; }
+function skLine(x1, y1, x2, y2, seed, o = {}){
+  const r = Rnd(seed * 97 + 13), len = Math.hypot(x2 - x1, y2 - y1), off = Math.min(2.4, len * 0.012 + 0.6);
+  let d = '';
+  for (let k = 0; k < 2; k++){
+    const j = () => (r() - 0.5) * 1.6;
+    const mx = (x1 + x2) / 2 + (r() - 0.5) * off * 2, my = (y1 + y2) / 2 + (r() - 0.5) * off * 2;
+    d += `M${(x1 + j()).toFixed(1)} ${(y1 + j()).toFixed(1)} Q${mx.toFixed(1)} ${my.toFixed(1)} ${(x2 + j()).toFixed(1)} ${(y2 + j()).toFixed(1)} `;
+  }
+  return `<path d="${d}" fill="none" stroke="${o.c || '#1e1e1e'}" stroke-width="${o.w || 1.8}" stroke-linecap="round"${o.dash ? ' stroke-dasharray="7 6"' : ''}/>`;
+}
+function skHead(x1, y1, x2, y2, seed, o){
+  const a = Math.atan2(y2 - y1, x2 - x1), L = 12, s = 0.45;
+  return skLine(x2, y2, x2 - L * Math.cos(a - s), y2 - L * Math.sin(a - s), seed + 1, { ...o, dash:false })
+       + skLine(x2, y2, x2 - L * Math.cos(a + s), y2 - L * Math.sin(a + s), seed + 2, { ...o, dash:false });
+}
+function skArrow(x1, y1, x2, y2, seed, o = {}){
+  return skLine(x1, y1, x2, y2, seed, o) + skHead(x1, y1, x2, y2, seed, o) + (o.both ? skHead(x2, y2, x1, y1, seed + 7, o) : '');
+}
+function skRect(x, y, w, h, seed, o = {}){
+  const fill = o.fill ? `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="6" fill="${o.fill}"/>` : '';
+  const hatch = o.hatch ? `<rect x="${x + 2}" y="${y + 2}" width="${w - 4}" height="${h - 4}" rx="5" fill="url(#${o.hatch})"/>` : '';
+  return fill + hatch + skLine(x, y, x + w, y, seed, o) + skLine(x + w, y, x + w, y + h, seed + 3, o) + skLine(x + w, y + h, x, y + h, seed + 5, o) + skLine(x, y + h, x, y, seed + 9, o);
+}
+function hatchDefs(){
+  const p = (id, c) => `<pattern id="${id}" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="7" stroke="${c}" stroke-width="1.2"/><line x1="0" y1="0" x2="7" y2="0" stroke="${c}" stroke-width="1.2"/></pattern>`;
+  return `<defs>${p('hb','rgba(25,113,194,.33)')}${p('hy','rgba(240,140,0,.4)')}${p('hg','rgba(47,158,68,.3)')}${p('ho','rgba(232,89,12,.3)')}${p('hk','rgba(30,30,30,.25)')}</defs>`;
+}
+
+(() => {
+  const BOOKS = ['小王子', '哈利波特', '被討厭的勇氣', '原子習慣'];
+  let logs = [], jar = null, sessions = {}, busy = false, bookI = 0, lastSid = null, page = { url:'/cart', html:'' };
+  const sid = () => Math.random().toString(16).slice(2, 6);
+
+  function server(method, path){
+    const s = jar && sessions[jar];
+    if (method === 'GET' && path === '/cart'){
+      if (!s) return { code:401, text:'Unauthorized', body:'{"error":"請先登入"}',
+        think: jar ? `有 Cookie「${jar}」……但記事本裡查不到這個編號。不認得，請先登入。` : '這個請求沒有帶 Cookie……我完全不知道你是誰。請先登入。',
+        page:'<p>請先登入，才能看購物車。</p>' };
+      return { code:200, text:'OK', body:JSON.stringify({ user:s.user, cart:s.cart }),
+        think:`Cookie 是「${jar}」→ 查記事本 → 是${s.user}！把${s.user}的購物車給他。`,
+        page:`<p>${s.user}，你好！購物車裡有 ${s.cart.length} 本書：</p>` + (s.cart.length ? `<ul>${s.cart.map(b => `<li>${b}</li>`).join('')}</ul>` : '<p class="empty">（還是空的）</p>') };
+    }
+    if (method === 'POST' && path === '/login'){
+      const id = sid(); sessions[id] = { user:'小明', cart:[] };
+      return { code:200, text:'OK', set:`sid=${id}; HttpOnly`, newSid:id, body:'{"message":"登入成功"}',
+        think:`帳號密碼正確，是小明。我在記事本寫下編號「${id}」= 小明，再用 Set-Cookie 把這個編號交給瀏覽器保管。`,
+        page:'<p>登入成功！歡迎，小明。</p>' };
+    }
+    if (method === 'POST' && path === '/cart'){
+      if (!s) return { code:401, text:'Unauthorized', body:'{"error":"請先登入"}',
+        think: jar ? `Cookie「${jar}」在記事本裡查不到。不知道要加進誰的購物車。` : '沒有 Cookie……我不知道要把書加進誰的購物車。',
+        page:'<p>請先登入，才能把書加入購物車。</p>' };
+      const b = BOOKS[bookI++ % BOOKS.length]; s.cart.push(b);
+      return { code:200, text:'OK', body:JSON.stringify({ added:b, count:s.cart.length }),
+        think:`Cookie「${jar}」→ 是${s.user}。把《${b}》加進${s.user}的購物車。`,
+        page:`<p>已加入《${b}》，購物車共 ${s.cart.length} 本。</p>` };
+    }
+    if (method === 'POST' && path === '/logout'){
+      if (s) delete sessions[jar];
+      return { code:200, text:'OK', set:'sid=; Max-Age=0', clear:true, body:'{"message":"已登出"}',
+        think: s ? `把記事本裡「${jar}」這一行劃掉，再叫瀏覽器把 Cookie 丟掉（Max-Age=0）。` : '你本來就沒登入，不過還是叫瀏覽器清掉 Cookie。',
+        page:'<p>你已登出。</p>' };
+    }
+  }
+
+  function reqText(method, path, body){
+    let t = `<span class="c-green">${method}</span> ${path} HTTP/1.1\nHost: bookshop.tw\n`;
+    t += jar ? `<mark class="ck">Cookie: sid=${jar}</mark>` : `<span class="nocookie">（沒有 Cookie）</span>`;
+    if (body) t += `\n\n${esc(body)}`;
+    return t;
+  }
+  function arrow(dir, on){
+    const c = dir > 0 ? '#2f9e44' : '#1971c2';
+    const label = dir > 0 ? '請求 →' : '← 回應';
+    $('arrow').innerHTML = `<svg viewBox="0 0 480 34" aria-hidden="true">${on ? (dir > 0 ? skArrow(20, 17, 460, 17, 5, { c, w:2.2 }) : skArrow(460, 17, 20, 17, 9, { c, w:2.2 })) : ''}<text x="240" y="12" text-anchor="middle" font-size="15" fill="${c}" font-family="var(--hand)">${on ? label : ''}</text></svg>`;
+  }
+  function renderJar(){
+    $('jar').innerHTML = jar ? `<span class="cookie">sid = ${jar}</span>` : '<span class="empty">（空的，沒有這個網站的 Cookie）</span>';
+    const rows = Object.entries(sessions).map(([k, v]) => `<tr class="${k === jar ? 'hit' : ''}"><td>${k}</td><td>${v.user}</td><td>${v.cart.length ? v.cart.join('、') : '—'}</td></tr>`).join('');
+    $('sess').innerHTML = rows || '<tr><td colspan="3" class="empty">（空白：還沒有人登入）</td></tr>';
+  }
+  function renderPage(){ $('pageUrl').textContent = page.url; $('pageBody').innerHTML = page.html; }
+  const wait = ms => new Promise(r => setTimeout(r, REDUCE ? 0 : ms));
+
+  async function send(method, path, body, instant){
+    if (busy) return; busy = true;
+    document.querySelectorAll('.acts .btn').forEach(b => b.disabled = true);
+    $('req').innerHTML = `<div class="h">請求<span>瀏覽器 → 伺服器</span></div><div class="code">${reqText(method, path, body)}</div>`;
+    $('req').classList.remove('pop'); void $('req').offsetWidth; $('req').classList.add('pop');
+    $('res').innerHTML = '<div class="h">回應<span>伺服器 → 瀏覽器</span></div><div class="code c-muted">…</div>';
+    $('think').textContent = '……';
+    arrow(1, true); if (!instant) await wait(650);
+    const r = server(method, path);
+    $('think').textContent = r.think;
+    if (!instant) await wait(650);
+    arrow(-1, true);
+    let rt = `HTTP/1.1 <span style="color:${r.code < 300 ? 'var(--green)' : 'var(--orange)'}">${r.code} ${r.text}</span>\nContent-Type: application/json`;
+    if (r.set) rt += `\n<mark class="set">Set-Cookie: ${r.set}</mark>`;
+    rt += `\n\n${esc(r.body)}`;
+    $('res').innerHTML = `<div class="h">回應<span>伺服器 → 瀏覽器</span></div><div class="code">${rt}</div>`;
+    $('res').classList.remove('pop'); void $('res').offsetWidth; $('res').classList.add('pop');
+    logs.unshift({ m:`${method} ${path}`, ck: jar ? `帶著 sid=${jar}` : '沒帶 Cookie', code:r.code });
+    $('log').innerHTML = logs.slice(0, 8).map(l => `<div><span>${l.m}</span><span class="${l.ck.startsWith('沒') ? 'nocookie' : ''}">${l.ck}</span><span class="${l.code < 300 ? 'ok' : 'bad'}">${l.code}</span></div>`).join('');
+    if (r.newSid) jar = r.newSid;
+    if (r.clear) jar = null;
+    page = { url:path, html:r.page };
+    renderJar(); renderPage();
+    busy = false; document.querySelectorAll('.acts .btn').forEach(b => b.disabled = false);
+  }
+
+  $('a-cart').addEventListener('click', () => send('GET', '/cart'));
+  $('a-login').addEventListener('click', () => send('POST', '/login', 'username=小明&password=••••••'));
+  $('a-add').addEventListener('click', () => send('POST', '/cart', `book=${BOOKS[bookI % BOOKS.length]}`));
+  $('a-logout').addEventListener('click', () => send('POST', '/logout'));
+  $('a-clear').addEventListener('click', () => {
+    if (busy) return;
+    jar = null; renderJar();
+    $('think').textContent = '（伺服器什麼都不知道：清 Cookie 是在你的瀏覽器裡做的，沒有送任何請求。記事本裡的那一行還在。）';
+    arrow(1, false);
+    $('req').innerHTML = '<div class="h">請求<span>瀏覽器 → 伺服器</span></div><div class="code c-muted">（沒有送出請求）</div>';
+    $('res').innerHTML = '<div class="h">回應<span>伺服器 → 瀏覽器</span></div><div class="code c-muted">—</div>';
+    $('hint').textContent = 'Cookie 清掉了。再按「看購物車」，伺服器還認得你嗎？';
+  });
+  function reset(){ logs = []; $('log').innerHTML = ''; jar = null; sessions = {}; bookI = 0; page = { url:'/cart', html:'' }; renderJar(); renderPage();
+    $('hint').textContent = '試試看：看購物車 → 登入 → 再看購物車 → 清除 Cookie → 再看一次';
+    send('GET', '/cart', null, true); }
+  $('reset').addEventListener('click', () => { if (!busy) reset(); });
+  reset();
+})();
+</script>
+
+</body>
+</html>

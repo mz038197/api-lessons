@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>狀態碼猜猜看</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=LXGW+WenKai+TC:wght@400;700&family=Patrick+Hand&display=swap">
+<style>
+/* Hand-drawn look matching the HTTP deck (Excalidraw palette). Deliberately single light theme: these pages sit on white slides. */
+:root{
+  --paper:#ffffff; --ink:#1e1e1e; --muted:#6c757d; --line:#ced4da; --soft:#f8f9fa;
+  --blue:#1971c2; --blue-bg:#e7f5ff; --blue-hatch:rgba(25,113,194,.32);
+  --yellow:#e67700; --yellow-bg:#fff9db; --yellow-hatch:rgba(240,140,0,.38);
+  --orange:#e8590c; --orange-bg:#fff4e6;
+  --green:#2f9e44; --green-bg:#ebfbee;
+  --red:#e03131; --red-bg:#fff5f5;
+  --pink:#c2255c; --pink-bg:#fff0f6;
+  --violet:#6741d9; --violet-bg:#f3f0ff;
+  --hand:"Patrick Hand","LXGW WenKai TC","Kaiti TC","STKaiti","BiauKai","KaiTi",cursive;
+  color-scheme:light;
+}
+html,body{height:100%}
+body{margin:0;box-sizing:border-box;background:var(--paper);color:var(--ink);font-family:var(--hand);overflow:hidden;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0}
+*,*::before,*::after{box-sizing:border-box}
+.viewport{position:relative;width:100%;height:100%;overflow:hidden}
+.stage{position:absolute;left:50%;top:0;width:1280px;height:720px;transform:translateX(-50%) scale(var(--s,1));transform-origin:top center;
+  padding:14px 10px;font-size:19px;line-height:1.45}
+button,input,select,textarea{font:inherit;color:inherit}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px dashed var(--blue);outline-offset:3px}
+
+.top{display:flex;justify-content:space-between;align-items:flex-end;gap:20px;margin-bottom:10px}
+h1{font-size:42px;margin:0;font-weight:400;line-height:1.05}
+.sub{color:var(--green);font-size:22px;margin-top:2px}
+.sk{border:2px solid var(--ink);border-radius:14px 5px 12px 6px/6px 12px 5px 14px;background:var(--paper)}
+.sk.thin{border-width:1.5px}
+.sk.dash{border-style:dashed}
+.hatch-blue{background:repeating-linear-gradient(45deg,var(--blue-hatch) 0 1.3px,transparent 1.3px 7px),repeating-linear-gradient(-45deg,var(--blue-hatch) 0 1.3px,transparent 1.3px 7px),var(--blue-bg)}
+.hatch-yellow{background:repeating-linear-gradient(45deg,var(--yellow-hatch) 0 1.3px,transparent 1.3px 7px),repeating-linear-gradient(-45deg,var(--yellow-hatch) 0 1.3px,transparent 1.3px 7px),var(--yellow-bg)}
+.btn{font-size:19px;padding:5px 16px;background:var(--paper);border:2px solid var(--ink);border-radius:12px 4px 10px 5px/5px 10px 4px 12px;cursor:pointer;box-shadow:2px 3px 0 var(--ink);white-space:nowrap}
+.btn:hover{background:var(--soft)}
+.btn:active{transform:translate(1px,2px);box-shadow:1px 1px 0 var(--ink)}
+.btn.pri{background:var(--ink);color:var(--paper)}
+.btn.pri:hover{background:#343a40}
+.btn:disabled{opacity:.35;cursor:not-allowed;box-shadow:none;transform:none}
+.btn.small{font-size:16px;padding:2px 10px;box-shadow:1px 2px 0 var(--ink)}
+.tools{display:flex;gap:10px;align-items:center}
+.label{font-size:16px;color:var(--muted)}
+.code{font-family:var(--hand);white-space:pre-wrap;word-break:break-word;line-height:1.5}
+.c-blue{color:var(--blue)} .c-green{color:var(--green)} .c-orange{color:var(--orange)} .c-red{color:var(--red)} .c-pink{color:var(--pink)} .c-yellow{color:var(--yellow)} .c-violet{color:var(--violet)} .c-muted{color:var(--muted)}
+mark.hl{background:linear-gradient(transparent 55%,#ffec99 55%);color:inherit;padding:0 2px}
+@keyframes wob{0%,100%{transform:rotate(-.6deg)}50%{transform:rotate(.6deg)}}
+@keyframes popin{from{opacity:0;transform:translateY(6px) scale(.98)}to{opacity:1;transform:none}}
+.pop{animation:popin .35s ease-out}
+@media (prefers-reduced-motion: reduce){.pop{animation:none}}
+
+/* Layout: question card with client→server sketch and four answer cards (left); cheat sheet + score (right) */
+.main{display:grid;grid-template-columns:870px 1fr;gap:16px;height:610px}
+.q{padding:12px 20px;display:flex;flex-direction:column;gap:12px;min-height:0}
+.qhead{display:flex;justify-content:space-between;align-items:center;font-size:17px;color:var(--muted)}
+.prog{display:flex;gap:5px}
+.prog i{width:22px;height:8px;border:1.5px solid var(--ink);border-radius:5px 2px 4px 2px}
+.prog i.ok{background:var(--green)} .prog i.no{background:var(--red)} .prog i.cur{background:var(--yellow-hatch)}
+.scene{font-size:30px;line-height:1.35;margin:0}
+.q svg{width:100%;height:200px;display:block;font-family:var(--hand)}
+.q svg text{paint-order:stroke;stroke:#fff;stroke-width:5px;stroke-linejoin:round}
+.opts{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}
+.opt{padding:8px 6px 10px;text-align:center;cursor:pointer;background:var(--paper);border:2px solid var(--ink);border-radius:14px 5px 12px 6px/6px 12px 5px 14px;box-shadow:2px 3px 0 var(--ink);transition:transform .15s}
+.opt:hover:not(:disabled){transform:rotate(-1deg) translateY(-2px)}
+.opt b{display:block;font-size:54px;font-weight:400;line-height:1.05}
+.opt span{font-size:18px;color:var(--muted)}
+.opt:disabled{cursor:default}
+.opt.right{background:var(--green-bg);border-color:var(--green);box-shadow:2px 3px 0 var(--green)}
+.opt.wrong{background:var(--red-bg);border-color:var(--red);box-shadow:2px 3px 0 var(--red)}
+.opt.dim{opacity:.4}
+.k2 b{color:var(--green)} .k3 b{color:var(--blue)} .k4 b{color:var(--orange)} .k5 b{color:var(--red)}
+.reveal{display:grid;grid-template-columns:1fr auto;gap:14px;align-items:end;min-height:96px}
+.reveal p{margin:0;font-size:20px}
+.reveal .verdict{font-size:24px}
+.reveal[hidden]{display:none}
+.side{display:flex;flex-direction:column;gap:12px;min-height:0}
+.cheat{padding:10px 16px}
+.cheat h2,.score h2{margin:0 0 6px;font-size:24px;font-weight:400}
+.cls{display:grid;grid-template-columns:28px 52px 1fr;gap:8px;align-items:center;font-size:18px;padding:3px 0}
+.cls i{width:24px;height:24px;border:1.5px solid var(--c);border-radius:6px 3px 6px 3px;background:repeating-linear-gradient(45deg,var(--c) 0 1.2px,transparent 1.2px 6px)}
+.cls b{font-weight:400;color:var(--c);font-size:22px}
+.cls.hit{background:var(--yellow-bg);border-radius:8px}
+.score{padding:10px 16px;flex:1;min-height:0;display:flex;flex-direction:column}
+.big{font-size:44px;line-height:1}
+.big small{font-size:20px;color:var(--muted)}
+.review{margin-top:8px;overflow:auto;flex:1;min-height:0;font-size:16px}
+.review div{display:grid;grid-template-columns:22px 48px 1fr;gap:6px;padding:2px 0;border-bottom:1px dashed var(--line)}
+.end{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;flex:1;text-align:center}
+.end .big{font-size:80px}
+.end p{font-size:22px;margin:0;max-width:640px}
+</style>
+</head>
+<body>
+
+
+<div class="viewport" id="vp">
+<div class="stage" id="stage">
+  <div class="top">
+    <div><h1>狀態碼猜猜看</h1><div class="sub">看情境，猜伺服器會回哪一個狀態碼</div></div>
+    <div class="tools"><button class="btn small" id="restart" type="button">重新開始</button><button class="btn small" id="fs" type="button">全螢幕</button></div>
+  </div>
+  <div class="main">
+    <section class="q sk" id="q" aria-live="polite"></section>
+    <aside class="side">
+      <div class="cheat sk">
+        <h2>開頭數字就是分類</h2>
+        <div class="cls" id="c2" style="--c:var(--green)"><i></i><b>2xx</b><span>成功了</span></div>
+        <div class="cls" id="c3" style="--c:var(--blue)"><i></i><b>3xx</b><span>請到別的地方拿</span></div>
+        <div class="cls" id="c4" style="--c:var(--orange)"><i></i><b>4xx</b><span>你（用戶端）的問題</span></div>
+        <div class="cls" id="c5" style="--c:var(--red)"><i></i><b>5xx</b><span>伺服器的問題</span></div>
+      </div>
+      <div class="score sk">
+        <h2>得分</h2>
+        <div class="big" id="score">0 <small>/ 0</small></div>
+        <div class="review" id="review"></div>
+      </div>
+    </aside>
+  </div>
+</div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+const REDUCE = matchMedia('(prefers-reduced-motion: reduce)').matches;
+(() => {
+  const st = $('stage'), vp = $('vp');
+  const fit = () => { const s = Math.min(vp.clientWidth / 1280, vp.clientHeight / 720); st.style.setProperty('--s', s > 0 ? s : 1); };
+  new ResizeObserver(fit).observe(vp); addEventListener('resize', fit); fit();
+  const fs = $('fs');
+  if (fs){
+    fs.addEventListener('click', async () => {
+      try { if (document.fullscreenElement) await document.exitFullscreen(); else await document.documentElement.requestFullscreen(); }
+      catch (e) { fs.textContent = '無法全螢幕'; setTimeout(() => fs.textContent = '全螢幕', 1600); }
+    });
+    document.addEventListener('fullscreenchange', () => { fs.textContent = document.fullscreenElement ? '結束全螢幕' : '全螢幕'; fit(); });
+  }
+})();
+
+/* ---- tiny "rough" sketch helpers: stable jitter per seed ---- */
+function Rnd(seed){ let s = Math.abs(Math.floor(seed)) % 2147483647 || 1; return () => (s = s * 16807 % 2147483647) / 2147483647; }
+function skLine(x1, y1, x2, y2, seed, o = {}){
+  const r = Rnd(seed * 97 + 13), len = Math.hypot(x2 - x1, y2 - y1), off = Math.min(2.4, len * 0.012 + 0.6);
+  let d = '';
+  for (let k = 0; k < 2; k++){
+    const j = () => (r() - 0.5) * 1.6;
+    const mx = (x1 + x2) / 2 + (r() - 0.5) * off * 2, my = (y1 + y2) / 2 + (r() - 0.5) * off * 2;
+    d += `M${(x1 + j()).toFixed(1)} ${(y1 + j()).toFixed(1)} Q${mx.toFixed(1)} ${my.toFixed(1)} ${(x2 + j()).toFixed(1)} ${(y2 + j()).toFixed(1)} `;
+  }
+  return `<path d="${d}" fill="none" stroke="${o.c || '#1e1e1e'}" stroke-width="${o.w || 1.8}" stroke-linecap="round"${o.dash ? ' stroke-dasharray="7 6"' : ''}/>`;
+}
+function skHead(x1, y1, x2, y2, seed, o){
+  const a = Math.atan2(y2 - y1, x2 - x1), L = 12, s = 0.45;
+  return skLine(x2, y2, x2 - L * Math.cos(a - s), y2 - L * Math.sin(a - s), seed + 1, { ...o, dash:false })
+       + skLine(x2, y2, x2 - L * Math.cos(a + s), y2 - L * Math.sin(a + s), seed + 2, { ...o, dash:false });
+}
+function skArrow(x1, y1, x2, y2, seed, o = {}){
+  return skLine(x1, y1, x2, y2, seed, o) + skHead(x1, y1, x2, y2, seed, o) + (o.both ? skHead(x2, y2, x1, y1, seed + 7, o) : '');
+}
+function skRect(x, y, w, h, seed, o = {}){
+  const fill = o.fill ? `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="6" fill="${o.fill}"/>` : '';
+  const hatch = o.hatch ? `<rect x="${x + 2}" y="${y + 2}" width="${w - 4}" height="${h - 4}" rx="5" fill="url(#${o.hatch})"/>` : '';
+  return fill + hatch + skLine(x, y, x + w, y, seed, o) + skLine(x + w, y, x + w, y + h, seed + 3, o) + skLine(x + w, y + h, x, y + h, seed + 5, o) + skLine(x, y + h, x, y, seed + 9, o);
+}
+function hatchDefs(){
+  const p = (id, c) => `<pattern id="${id}" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="7" stroke="${c}" stroke-width="1.2"/><line x1="0" y1="0" x2="7" y2="0" stroke="${c}" stroke-width="1.2"/></pattern>`;
+  return `<defs>${p('hb','rgba(25,113,194,.33)')}${p('hy','rgba(240,140,0,.4)')}${p('hg','rgba(47,158,68,.3)')}${p('ho','rgba(232,89,12,.3)')}${p('hk','rgba(30,30,30,.25)')}</defs>`;
+}
+
+(() => {
+  const NAME = { 200:'OK', 201:'Created', 204:'No Content', 301:'Moved Permanently', 302:'Found', 304:'Not Modified', 400:'Bad Request', 401:'Unauthorized', 403:'Forbidden', 404:'Not Found', 500:'Internal Server Error', 503:'Service Unavailable' };
+  const ZH = { 200:'成功', 201:'已建立', 301:'永久搬家', 302:'暫時轉址', 304:'沒有更新', 400:'請求有誤', 401:'沒有登入', 403:'沒有權限', 404:'找不到', 500:'伺服器出錯', 503:'暫停服務' };
+  const COLOR = { 2:'#2f9e44', 3:'#1971c2', 4:'#e8590c', 5:'#e03131' };
+  const QS = [
+    { t:'打開首頁', s:'打開學校網站首頁，一切正常。', req:'GET / HTTP/1.1', a:200, o:[200,201,301,404],
+      e:'一切順利，伺服器把首頁送回來。2 開頭就是成功。' },
+    { t:'網址打錯', s:'網址打錯字：把 articles 打成 artcles。', req:'GET /artcles/123', a:404, o:[400,403,404,500],
+      e:'伺服器上找不到這個路徑。是「你」打錯，所以是 4 開頭。' },
+    { t:'註冊新帳號', s:'填好註冊表單送出，伺服器幫你建立了新帳號。', req:'POST /users', a:201, o:[200,201,302,400],
+      e:'成功了，而且「新建立了一筆資料」。用 201 Created 比 200 更精確。' },
+    { t:'密碼打錯', s:'登入時密碼打錯。', req:'POST /login', a:401, o:[400,401,403,404],
+      e:'伺服器無法確認你是誰（身分驗證失敗），回 401。' },
+    { t:'學生開老師頁面', s:'用學生帳號登入後，想打開「老師專用」的成績管理頁。', req:'GET /admin/grades', a:403, o:[401,403,404,500],
+      e:'伺服器知道你是誰，但你沒有權限。<br>401 是「你是誰？」，403 是「我知道你是誰，但不行」。' },
+    { t:'網址搬家', s:'部落格搬家了，你點了舊網址。', req:'GET /old-blog', a:301, o:[200,301,404,503], extra:'Location: /blog',
+      e:'網址永久搬家。伺服器回 301，用 Location 標頭告訴瀏覽器新網址，瀏覽器會自動跳過去。' },
+    { t:'程式有 bug', s:'購物網站的程式有 bug，一打開購物車就出錯。', req:'GET /cart', a:500, o:[400,404,500,503],
+      e:'伺服器自己的程式出錯，不是你的錯。5 開頭就是伺服器的問題。' },
+    { t:'搶票人太多', s:'搶演唱會門票，幾十萬人同時湧入，伺服器忙不過來。', req:'GET /tickets', a:503, o:[403,404,500,503],
+      e:'伺服器還活著，只是暫時無法服務（太忙或在維修）。503 的意思是「等一下再來」。' },
+    { t:'Email 格式錯', s:'註冊時，Email 欄位只填了「abc」。', req:'POST /signup   email=abc', a:400, o:[400,401,404,500],
+      e:'你送的資料格式不對，伺服器不接受，回 400 Bad Request。' },
+    { t:'圖片沒更新', s:'再次打開剛剛看過的網站，瀏覽器問：「這張圖跟我手上的一樣嗎？」', req:'GET /logo.png（附上：我手上的版本）', a:304, o:[200,301,304,404],
+      e:'圖片沒有更新，伺服器回 304：「一樣，用你存著的那份就好。」不用再傳一次，省流量。' }
+  ];
+  let order = QS.map((_, i) => i), pos = 0, picked = null, results = [];
+
+  function sketch(q, ans){
+    let s = hatchDefs();
+    s += skRect(20, 40, 150, 70, 11, { hatch:'hb', fill:'#fff', w:2 }) + `<text x="95" y="132" text-anchor="middle" font-size="19">你（瀏覽器）</text>`;
+    s += skRect(690, 40, 150, 70, 21, { hatch:'hy', fill:'#fff', w:2 }) + `<text x="765" y="132" text-anchor="middle" font-size="19">伺服器</text>`;
+    s += skArrow(185, 58, 675, 58, 31, { w:2 }) + `<text x="430" y="46" text-anchor="middle" font-size="20">${esc(q.req)}</text>`;
+    if (ans == null){
+      s += skArrow(675, 94, 185, 94, 41, { w:2, dash:true }) + `<text x="430" y="122" text-anchor="middle" font-size="34" fill="#868e96">?</text>`;
+    } else {
+      const c = COLOR[String(ans)[0]];
+      s += skArrow(675, 94, 185, 94, 41, { w:2.4, c }) + `<text x="430" y="122" text-anchor="middle" font-size="22" fill="${c}">HTTP/1.1 ${ans} ${NAME[ans]}${q.extra ? '  ·  ' + esc(q.extra) : ''}</text>`;
+    }
+    return `<svg viewBox="0 0 860 150" aria-hidden="true">${s}</svg>`;
+  }
+  function render(){
+    document.querySelectorAll('.cls').forEach(c => c.classList.remove('hit'));
+    if (pos >= order.length) return renderEnd();
+    const q = QS[order[pos]];
+    const prog = order.map((_, i) => `<i class="${i < results.length ? (results[i].ok ? 'ok' : 'no') : i === pos ? 'cur' : ''}"></i>`).join('');
+    const opts = q.o.map((c, i) => {
+      let cls = 'opt k' + String(c)[0];
+      if (picked != null){ if (c === q.a) cls += ' right'; else if (c === picked) cls += ' wrong'; else cls += ' dim'; }
+      return `<button class="${cls}" type="button" id="opt-${i}" data-c="${c}" ${picked != null ? 'disabled' : ''}><b>${c}</b><span>${ZH[c]}</span></button>`;
+    }).join('');
+    const ok = picked === q.a;
+    $('q').innerHTML = `<div class="qhead"><span>第 ${pos + 1} 題 / 共 ${order.length} 題</span><span class="prog">${prog}</span></div>
+      <p class="scene">${esc(q.s)}</p>${sketch(q, picked != null ? q.a : null)}
+      <div class="opts">${opts}</div>
+      <div class="reveal pop" ${picked == null ? 'hidden' : ''}>
+        <div><div class="verdict" style="color:${ok ? 'var(--green)' : 'var(--red)'}">${ok ? '答對了！' : `不是 ${picked}，答案是 ${q.a} ${NAME[q.a]}`}</div><p>${q.e}</p></div>
+        <button class="btn pri" id="nextQ" type="button">${pos + 1 < order.length ? '下一題' : '看結果'}</button>
+      </div>`;
+    if (picked != null) $('c' + String(q.a)[0]).classList.add('hit');
+    const nb = $('nextQ'); if (nb && picked != null) nb.focus();
+    renderScore();
+  }
+  function renderScore(){
+    const right = results.filter(r => r.ok).length;
+    $('score').innerHTML = `${right} <small>/ ${results.length} 題答對</small>`;
+    $('review').innerHTML = results.map(r => `<div><span style="color:${r.ok ? 'var(--green)' : 'var(--red)'}">${r.ok ? '○' : '×'}</span><span style="color:${COLOR[String(r.a)[0]]}">${r.a}</span><span>${esc(r.short)}</span></div>`).join('');
+  }
+  function renderEnd(){
+    const right = results.filter(r => r.ok).length, n = results.length;
+    const msg = right === n ? '全對！你已經是狀態碼達人了。' : right >= n * .7 ? '很不錯！看看右邊答錯的那幾題，特別注意 401 和 403 的差別。' : '多玩幾次就會記住：先看開頭數字是 2、3、4 還是 5。';
+    $('q').innerHTML = `<div class="end pop"><div class="big">${right} <small>/ ${n}</small></div><p>${msg}</p><button class="btn pri" id="again" type="button">換個順序再玩一次</button></div>`;
+    $('again').addEventListener('click', () => start(true));
+    renderScore();
+  }
+  function start(shuffle){
+    order = QS.map((_, i) => i);
+    if (shuffle) for (let i = order.length - 1; i > 0; i--){ const j = Math.floor(Math.random() * (i + 1)); [order[i], order[j]] = [order[j], order[i]]; }
+    pos = 0; picked = null; results = []; render();
+  }
+  $('q').addEventListener('click', e => {
+    const o = e.target.closest('.opt');
+    if (o && picked == null){
+      const q = QS[order[pos]]; picked = +o.dataset.c;
+      results.push({ ok: picked === q.a, a: q.a, short: q.t });
+      render(); return;
+    }
+    if (e.target.closest('#nextQ')){ pos++; picked = null; render(); }
+  });
+  $('restart').addEventListener('click', () => start(false));
+  start(false);
+})();
+</script>
+
+</body>
+</html>

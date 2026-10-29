@@ -1,0 +1,307 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>HTTP 請求組合器</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=LXGW+WenKai+TC:wght@400;700&family=Patrick+Hand&display=swap">
+<style>
+/* Hand-drawn look matching the HTTP deck (Excalidraw palette). Deliberately single light theme: these pages sit on white slides. */
+:root{
+  --paper:#ffffff; --ink:#1e1e1e; --muted:#6c757d; --line:#ced4da; --soft:#f8f9fa;
+  --blue:#1971c2; --blue-bg:#e7f5ff; --blue-hatch:rgba(25,113,194,.32);
+  --yellow:#e67700; --yellow-bg:#fff9db; --yellow-hatch:rgba(240,140,0,.38);
+  --orange:#e8590c; --orange-bg:#fff4e6;
+  --green:#2f9e44; --green-bg:#ebfbee;
+  --red:#e03131; --red-bg:#fff5f5;
+  --pink:#c2255c; --pink-bg:#fff0f6;
+  --violet:#6741d9; --violet-bg:#f3f0ff;
+  --hand:"Patrick Hand","LXGW WenKai TC","Kaiti TC","STKaiti","BiauKai","KaiTi",cursive;
+  color-scheme:light;
+}
+html,body{height:100%}
+body{margin:0;box-sizing:border-box;background:var(--paper);color:var(--ink);font-family:var(--hand);overflow:hidden;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0}
+*,*::before,*::after{box-sizing:border-box}
+.viewport{position:relative;width:100%;height:100%;overflow:hidden}
+.stage{position:absolute;left:50%;top:0;width:1280px;height:720px;transform:translateX(-50%) scale(var(--s,1));transform-origin:top center;
+  padding:14px 10px;font-size:19px;line-height:1.45}
+button,input,select,textarea{font:inherit;color:inherit}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px dashed var(--blue);outline-offset:3px}
+
+.top{display:flex;justify-content:space-between;align-items:flex-end;gap:20px;margin-bottom:10px}
+h1{font-size:42px;margin:0;font-weight:400;line-height:1.05}
+.sub{color:var(--green);font-size:22px;margin-top:2px}
+.sk{border:2px solid var(--ink);border-radius:14px 5px 12px 6px/6px 12px 5px 14px;background:var(--paper)}
+.sk.thin{border-width:1.5px}
+.sk.dash{border-style:dashed}
+.hatch-blue{background:repeating-linear-gradient(45deg,var(--blue-hatch) 0 1.3px,transparent 1.3px 7px),repeating-linear-gradient(-45deg,var(--blue-hatch) 0 1.3px,transparent 1.3px 7px),var(--blue-bg)}
+.hatch-yellow{background:repeating-linear-gradient(45deg,var(--yellow-hatch) 0 1.3px,transparent 1.3px 7px),repeating-linear-gradient(-45deg,var(--yellow-hatch) 0 1.3px,transparent 1.3px 7px),var(--yellow-bg)}
+.btn{font-size:19px;padding:5px 16px;background:var(--paper);border:2px solid var(--ink);border-radius:12px 4px 10px 5px/5px 10px 4px 12px;cursor:pointer;box-shadow:2px 3px 0 var(--ink);white-space:nowrap}
+.btn:hover{background:var(--soft)}
+.btn:active{transform:translate(1px,2px);box-shadow:1px 1px 0 var(--ink)}
+.btn.pri{background:var(--ink);color:var(--paper)}
+.btn.pri:hover{background:#343a40}
+.btn:disabled{opacity:.35;cursor:not-allowed;box-shadow:none;transform:none}
+.btn.small{font-size:16px;padding:2px 10px;box-shadow:1px 2px 0 var(--ink)}
+.tools{display:flex;gap:10px;align-items:center}
+.label{font-size:16px;color:var(--muted)}
+.code{font-family:var(--hand);white-space:pre-wrap;word-break:break-word;line-height:1.5}
+.c-blue{color:var(--blue)} .c-green{color:var(--green)} .c-orange{color:var(--orange)} .c-red{color:var(--red)} .c-pink{color:var(--pink)} .c-yellow{color:var(--yellow)} .c-violet{color:var(--violet)} .c-muted{color:var(--muted)}
+mark.hl{background:linear-gradient(transparent 55%,#ffec99 55%);color:inherit;padding:0 2px}
+@keyframes wob{0%,100%{transform:rotate(-.6deg)}50%{transform:rotate(.6deg)}}
+@keyframes popin{from{opacity:0;transform:translateY(6px) scale(.98)}to{opacity:1;transform:none}}
+.pop{animation:popin .35s ease-out}
+@media (prefers-reduced-motion: reduce){.pop{animation:none}}
+
+/* Layout: form (left) builds the request; annotated message + mock response (right) */
+.main{display:grid;grid-template-columns:420px 1fr;gap:16px;height:604px}
+.form{padding:10px 16px;display:flex;flex-direction:column;gap:8px;min-height:0}
+.lbl{font-size:16px;color:var(--muted);display:flex;justify-content:space-between;align-items:center}
+.methods{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.m{font-size:20px;padding:3px 0;border:2px solid var(--c);color:var(--c);background:var(--paper);border-radius:10px 4px 9px 5px/5px 9px 4px 10px;cursor:pointer}
+.m[aria-pressed="true"]{background:var(--c);color:#fff}
+.mGET{--c:var(--green)} .mPOST{--c:var(--blue)} .mPUT{--c:var(--orange)} .mDELETE{--c:var(--red)}
+.inp{width:100%;font-size:18px;padding:4px 10px;border:1.5px solid var(--ink);border-radius:8px 3px 7px 4px/4px 7px 3px 8px;background:var(--paper)}
+.hdrs{display:flex;flex-direction:column;gap:5px;max-height:132px;overflow:auto}
+.hrow{display:grid;grid-template-columns:150px 1fr 28px;gap:6px}
+.hrow input{font-size:16px;padding:2px 8px}
+.x{border:0;background:none;font-size:20px;cursor:pointer;color:var(--muted)}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font-size:15px;padding:1px 9px;border:1.5px dashed var(--ink);border-radius:999px;background:var(--paper);cursor:pointer}
+.chip:hover{background:var(--yellow-bg)}
+textarea.inp{font-size:16px;resize:none;height:128px}
+textarea.inp:disabled{background:var(--soft);color:var(--muted)}
+.right{display:flex;flex-direction:column;gap:10px;min-height:0}
+.msgbox{padding:10px 16px;flex:1;min-height:0;display:flex;flex-direction:column;gap:6px}
+.msgbox h2,.resbox h2{margin:0;font-size:22px;font-weight:400;display:flex;justify-content:space-between;align-items:center}
+.sec{display:grid;grid-template-columns:1fr 150px;gap:12px;align-items:center}
+.sec .box{padding:3px 12px;font-size:18px;max-height:112px;overflow:auto;border:1.6px solid var(--ink);border-radius:10px 4px 9px 5px/5px 9px 4px 10px;min-height:34px;white-space:pre-wrap;word-break:break-all}
+.sec .box.blank{border-style:dashed;color:var(--muted);font-size:16px;min-height:26px;padding:1px 12px}
+.sec .tag{font-size:19px;position:relative;padding-left:22px}
+.sec .tag::before{content:"";position:absolute;left:0;top:50%;width:16px;border-top:1.6px solid var(--ink)}
+.sec .tag small{display:block;font-size:14px;color:var(--muted);line-height:1.2}
+.start{display:flex;gap:14px;align-items:flex-start}
+.start span{display:flex;flex-direction:column;align-items:center;line-height:1.2}
+.start small{font-size:13px;color:var(--muted)}
+.auto{font-size:13px;color:var(--violet);border:1px solid var(--violet);border-radius:999px;padding:0 6px;margin-left:6px;vertical-align:2px}
+.warns{display:flex;flex-direction:column;gap:3px;font-size:16px}
+.warns div{color:var(--orange)} .warns div.ok{color:var(--green)}
+.resbox{padding:8px 16px;height:200px;display:flex;flex-direction:column;gap:4px}
+.res{font-size:18px;white-space:pre-wrap;word-break:break-word;overflow:auto;flex:1;min-height:0;line-height:1.4}
+.resgrid{display:grid;grid-template-columns:1fr 290px;gap:14px;flex:1;min-height:0}
+.why{font-size:18px;color:var(--ink);background:var(--yellow-bg);padding:8px 12px;border-radius:10px 4px 9px 5px/5px 9px 4px 10px;align-self:start}
+.why:empty{display:none}
+</style>
+</head>
+<body>
+
+
+<div class="viewport" id="vp">
+<div class="stage" id="stage">
+  <div class="top">
+    <div><h1>組一個 HTTP 請求</h1><div class="sub">選方法、填網址、加標頭，看看一個請求實際長什麼樣</div></div>
+    <button class="btn small" id="fs" type="button">全螢幕</button>
+  </div>
+  <div class="main">
+    <section class="form sk" aria-label="請求設定">
+      <div class="lbl">方法：要做什麼</div>
+      <div class="methods" role="group" aria-label="HTTP 方法">
+        <button class="m mGET" type="button" id="m-GET" data-m="GET">GET</button>
+        <button class="m mPOST" type="button" id="m-POST" data-m="POST">POST</button>
+        <button class="m mPUT" type="button" id="m-PUT" data-m="PUT">PUT</button>
+        <button class="m mDELETE" type="button" id="m-DELETE" data-m="DELETE">DELETE</button>
+      </div>
+      <div class="lbl"><label for="url">網址：對誰、要什麼</label></div>
+      <input class="inp" id="url" spellcheck="false" value="https://vanscoding.com/articles/working-memory">
+      <div class="lbl"><span>標頭 Headers：附加說明</span><button class="btn small" type="button" id="addH">＋ 加一行</button></div>
+      <div class="hdrs" id="hdrs"></div>
+      <div class="chips" id="hchips"></div>
+      <div class="lbl"><label for="body">主體 Body：要傳的資料</label><span id="bodyNote"></span></div>
+      <textarea class="inp" id="body" spellcheck="false"></textarea>
+      <div class="lbl">快速範例</div>
+      <div class="chips" id="ex"></div>
+    </section>
+    <section class="right">
+      <div class="msgbox sk" aria-label="組好的請求">
+        <h2><span>組好的請求</span><button class="btn pri small" type="button" id="send">送出看看</button></h2>
+        <div class="sec"><div class="box" id="s-start"></div><div class="tag">起始行<small>方法 · 路徑 · 版本</small></div></div>
+        <div class="sec"><div class="box" id="s-head"></div><div class="tag">標頭 Headers<small>一行一個「名稱: 值」</small></div></div>
+        <div class="sec"><div class="box blank">（空一行）</div><div class="tag">分隔<small>標頭到這裡結束</small></div></div>
+        <div class="sec"><div class="box" id="s-body"></div><div class="tag">主體 Body<small>真正要傳的資料</small></div></div>
+        <div class="warns" id="warns"></div>
+      </div>
+      <div class="resbox sk" aria-live="polite"><h2><span>伺服器的回應</span><span class="label">（模擬的伺服器）</span></h2><div class="resgrid"><div class="res" id="res"></div><div class="why" id="why"></div></div></div>
+    </section>
+  </div>
+</div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+const REDUCE = matchMedia('(prefers-reduced-motion: reduce)').matches;
+(() => {
+  const st = $('stage'), vp = $('vp');
+  const fit = () => { const s = Math.min(vp.clientWidth / 1280, vp.clientHeight / 720); st.style.setProperty('--s', s > 0 ? s : 1); };
+  new ResizeObserver(fit).observe(vp); addEventListener('resize', fit); fit();
+  const fs = $('fs');
+  if (fs){
+    fs.addEventListener('click', async () => {
+      try { if (document.fullscreenElement) await document.exitFullscreen(); else await document.documentElement.requestFullscreen(); }
+      catch (e) { fs.textContent = '無法全螢幕'; setTimeout(() => fs.textContent = '全螢幕', 1600); }
+    });
+    document.addEventListener('fullscreenchange', () => { fs.textContent = document.fullscreenElement ? '結束全螢幕' : '全螢幕'; fit(); });
+  }
+})();
+
+/* ---- tiny "rough" sketch helpers: stable jitter per seed ---- */
+function Rnd(seed){ let s = Math.abs(Math.floor(seed)) % 2147483647 || 1; return () => (s = s * 16807 % 2147483647) / 2147483647; }
+function skLine(x1, y1, x2, y2, seed, o = {}){
+  const r = Rnd(seed * 97 + 13), len = Math.hypot(x2 - x1, y2 - y1), off = Math.min(2.4, len * 0.012 + 0.6);
+  let d = '';
+  for (let k = 0; k < 2; k++){
+    const j = () => (r() - 0.5) * 1.6;
+    const mx = (x1 + x2) / 2 + (r() - 0.5) * off * 2, my = (y1 + y2) / 2 + (r() - 0.5) * off * 2;
+    d += `M${(x1 + j()).toFixed(1)} ${(y1 + j()).toFixed(1)} Q${mx.toFixed(1)} ${my.toFixed(1)} ${(x2 + j()).toFixed(1)} ${(y2 + j()).toFixed(1)} `;
+  }
+  return `<path d="${d}" fill="none" stroke="${o.c || '#1e1e1e'}" stroke-width="${o.w || 1.8}" stroke-linecap="round"${o.dash ? ' stroke-dasharray="7 6"' : ''}/>`;
+}
+function skHead(x1, y1, x2, y2, seed, o){
+  const a = Math.atan2(y2 - y1, x2 - x1), L = 12, s = 0.45;
+  return skLine(x2, y2, x2 - L * Math.cos(a - s), y2 - L * Math.sin(a - s), seed + 1, { ...o, dash:false })
+       + skLine(x2, y2, x2 - L * Math.cos(a + s), y2 - L * Math.sin(a + s), seed + 2, { ...o, dash:false });
+}
+function skArrow(x1, y1, x2, y2, seed, o = {}){
+  return skLine(x1, y1, x2, y2, seed, o) + skHead(x1, y1, x2, y2, seed, o) + (o.both ? skHead(x2, y2, x1, y1, seed + 7, o) : '');
+}
+function skRect(x, y, w, h, seed, o = {}){
+  const fill = o.fill ? `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="6" fill="${o.fill}"/>` : '';
+  const hatch = o.hatch ? `<rect x="${x + 2}" y="${y + 2}" width="${w - 4}" height="${h - 4}" rx="5" fill="url(#${o.hatch})"/>` : '';
+  return fill + hatch + skLine(x, y, x + w, y, seed, o) + skLine(x + w, y, x + w, y + h, seed + 3, o) + skLine(x + w, y + h, x, y + h, seed + 5, o) + skLine(x, y + h, x, y, seed + 9, o);
+}
+function hatchDefs(){
+  const p = (id, c) => `<pattern id="${id}" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="7" stroke="${c}" stroke-width="1.2"/><line x1="0" y1="0" x2="7" y2="0" stroke="${c}" stroke-width="1.2"/></pattern>`;
+  return `<defs>${p('hb','rgba(25,113,194,.33)')}${p('hy','rgba(240,140,0,.4)')}${p('hg','rgba(47,158,68,.3)')}${p('ho','rgba(232,89,12,.3)')}${p('hk','rgba(30,30,30,.25)')}</defs>`;
+}
+
+(() => {
+  let method = 'GET', headers = [];
+  const CHIPS = [['Accept','application/json'],['Content-Type','application/json'],['Authorization','Bearer abc123'],['Cookie','sid=6a9b'],['User-Agent','Chrome/130'],['Accept-Language','zh-TW']];
+  const EX = [
+    { n:'讀一篇文章', m:'GET', u:'https://vanscoding.com/articles/working-memory', h:[['Accept','text/html']], b:'' },
+    { n:'查學生清單', m:'GET', u:'https://vanscoding.com/api/students?grade=2', h:[['Accept','application/json']], b:'' },
+    { n:'新增一位學生', m:'POST', u:'https://vanscoding.com/api/students', h:[['Content-Type','application/json']], b:'{\n  "name": "小華",\n  "grade": 1\n}' },
+    { n:'忘了 Content-Type', m:'POST', u:'https://vanscoding.com/api/students', h:[], b:'{"name": "小華"}' },
+    { n:'沒登入就刪除', m:'DELETE', u:'https://vanscoding.com/api/students/3', h:[], b:'' },
+    { n:'登入後刪除', m:'DELETE', u:'https://vanscoding.com/api/students/3', h:[['Authorization','Bearer abc123']], b:'' }
+  ];
+  const STUDENTS = { 1:{ id:1, name:'小明', grade:2 }, 2:{ id:2, name:'小美', grade:2 }, 3:{ id:3, name:'阿凱', grade:1 } };
+  const MC = { GET:'var(--green)', POST:'var(--blue)', PUT:'var(--orange)', DELETE:'var(--red)' };
+
+  function parseUrl(){ try { const u = new URL($('url').value.trim()); return u; } catch { return null; } }
+  const bytes = s => new TextEncoder().encode(s).length;
+  const getH = n => { const h = headers.find(x => x[0].trim().toLowerCase() === n.toLowerCase()); return h ? h[1].trim() : null; };
+
+  function renderHeaders(){
+    $('hdrs').innerHTML = headers.map(([k, v], i) => `<div class="hrow"><input class="inp" data-i="${i}" data-k="0" value="${esc(k)}" aria-label="標頭名稱" spellcheck="false"><input class="inp" data-i="${i}" data-k="1" value="${esc(v)}" aria-label="標頭值" spellcheck="false"><button class="x" type="button" data-del="${i}" aria-label="刪除這一行">×</button></div>`).join('')
+      || '<div class="label">（沒有自訂標頭）</div>';
+    $('hchips').innerHTML = CHIPS.filter(([k]) => !getH(k)).map(([k, v], i) => `<button class="chip" type="button" data-ck="${k}" data-cv="${v}">+ ${k}</button>`).join('');
+  }
+  function build(){
+    const u = parseUrl(), body = $('body').value;
+    document.querySelectorAll('.m').forEach(b => b.setAttribute('aria-pressed', b.dataset.m === method));
+    $('body').disabled = method === 'GET';
+    $('bodyNote').textContent = method === 'GET' ? 'GET 通常不帶 Body' : '';
+    if (!u){ $('s-start').innerHTML = '<span class="c-red">網址格式不對，例如：https://vanscoding.com/articles/1</span>'; $('s-head').textContent = ''; $('s-body').textContent = ''; return; }
+    const path = u.pathname + u.search;
+    $('s-start').innerHTML = `<div class="start"><span><b style="font-weight:400;color:${MC[method]}">${method}</b><small>方法</small></span><span><span class="c-blue">${esc(path)}</span><small>路徑</small></span><span><span class="c-muted">HTTP/1.1</span><small>版本</small></span></div>`;
+    const useBody = method !== 'GET' && body.trim() !== '';
+    let hl = `Host: ${esc(u.host)}<span class="auto">自動</span>`;
+    headers.filter(([k]) => k.trim()).forEach(([k, v]) => { hl += `\n${esc(k.trim())}: ${esc(v.trim())}`; });
+    if (useBody) hl += `\nContent-Length: ${bytes(body)}<span class="auto">自動</span>`;
+    $('s-head').innerHTML = hl;
+    $('s-body').innerHTML = useBody ? esc(body) : '<span class="c-muted">（沒有 Body）</span>';
+    /* checks */
+    const w = [];
+    if (method === 'GET' && body.trim()) w.push('GET 通常不帶 Body，伺服器多半會忽略它。');
+    if (useBody && !getH('Content-Type')) w.push('有 Body 卻沒說是什麼格式：加上 Content-Type 吧。');
+    if (useBody && /json/i.test(getH('Content-Type') || '')){ try { JSON.parse(body); } catch { w.push('Content-Type 說是 JSON，但 Body 不是合法的 JSON。'); } }
+    if ((method === 'POST' || method === 'PUT') && !useBody) w.push(`${method} 通常要帶 Body（要新增或更新的資料）。`);
+    $('warns').innerHTML = w.length ? w.map(x => `<div>⚠ ${esc(x)}</div>`).join('') : '<div class="ok">看起來是一個完整的請求。按「送出看看」。</div>';
+  }
+
+  function server(){
+    const u = parseUrl(); if (!u) return null;
+    const p = u.pathname.replace(/\/+$/, '') || '/', body = $('body').value.trim(), ct = getH('Content-Type') || '', auth = getH('Authorization');
+    let m;
+    const J = o => JSON.stringify(o);
+    if ((m = p.match(/^\/articles\/([\w-]+)$/))){
+      if (method !== 'GET') return { c:405, t:'Method Not Allowed', ct:'text/plain', b:'這個網址只能讀取（GET）', why:'文章頁只接受 GET；其他方法回 405。' };
+      return { c:200, t:'OK', ct:'text/html', b:`<html>\n  <h1>${m[1]}</h1>\n  <p>……文章內容……</p>\n</html>`, why:'讀取成功，回傳一份 HTML，瀏覽器會把它畫成網頁。' };
+    }
+    if (p === '/api/students'){
+      if (method === 'GET'){
+        const g = u.searchParams.get('grade');
+        const list = Object.values(STUDENTS).filter(s => !g || String(s.grade) === g);
+        return { c:200, t:'OK', ct:'application/json', b:J(list), why: g ? `網址後面的 ?grade=${g} 是查詢參數：只要 ${g} 年級的學生。` : '讀取成功，回傳 JSON 格式的學生清單。' };
+      }
+      if (method === 'POST'){
+        if (!body) return { c:400, t:'Bad Request', ct:'application/json', b:J({ error:'沒有收到資料' }), why:'POST 要新增資料，但 Body 是空的。' };
+        if (!/json/i.test(ct)) return { c:415, t:'Unsupported Media Type', ct:'application/json', b:J({ error:'請用 Content-Type: application/json' }), why:'伺服器不知道你送的是什麼格式（沒有 Content-Type），只好拒絕。' };
+        let o; try { o = JSON.parse(body); } catch { return { c:400, t:'Bad Request', ct:'application/json', b:J({ error:'JSON 格式錯誤' }), why:'Body 不是合法的 JSON，伺服器看不懂。' }; }
+        if (!o.name) return { c:400, t:'Bad Request', ct:'application/json', b:J({ error:'缺少 name' }), why:'資料少了必要的 name 欄位。' };
+        return { c:201, t:'Created', ct:'application/json', extra:'Location: /api/students/4', b:J({ id:4, ...o }), why:'新增成功：201 Created，Location 標頭告訴你新資料的網址。' };
+      }
+      return { c:405, t:'Method Not Allowed', ct:'text/plain', b:'', why:`/api/students 這個「整群學生」的網址不接受 ${method}；要改或刪哪一位，網址要指定 id，例如 /api/students/3。` };
+    }
+    if ((m = p.match(/^\/api\/students\/(\d+)$/))){
+      const s = STUDENTS[m[1]];
+      if (!s) return { c:404, t:'Not Found', ct:'application/json', b:J({ error:`沒有 id 為 ${m[1]} 的學生` }), why:'找不到這位學生。' };
+      if (method === 'GET') return { c:200, t:'OK', ct:'application/json', b:J(s), why:'讀取一位學生。' };
+      if (method === 'DELETE' || method === 'PUT'){
+        if (!auth) return { c:401, t:'Unauthorized', ct:'application/json', b:J({ error:'請先登入' }), why:'修改或刪除資料要證明你是誰：加上 Authorization 標頭。' };
+        if (method === 'DELETE') return { c:204, t:'No Content', ct:null, b:'', why:'刪除成功。204 的意思是「成功了，但沒有內容要回給你」。' };
+        if (!/json/i.test(ct) || !body) return { c:400, t:'Bad Request', ct:'application/json', b:J({ error:'請用 JSON 送出新資料' }), why:'PUT 要用 Body 帶上整筆新資料，並用 Content-Type 說明是 JSON。' };
+        try { const o = JSON.parse(body); return { c:200, t:'OK', ct:'application/json', b:J({ id:s.id, ...o }), why:'整筆更新成功。' }; }
+        catch { return { c:400, t:'Bad Request', ct:'application/json', b:J({ error:'JSON 格式錯誤' }), why:'Body 不是合法的 JSON。' }; }
+      }
+      return { c:405, t:'Method Not Allowed', ct:'text/plain', b:'', why:'要新增學生，請對 /api/students 送 POST，不要指定 id。' };
+    }
+    return { c:404, t:'Not Found', ct:'text/html', b:'<h1>404</h1>', why:'這台伺服器上沒有這個路徑。試試 /articles/… 或 /api/students。' };
+  }
+  function send(){
+    const r = server();
+    if (!r){ $('res').innerHTML = '<span class="c-red">網址格式不對，送不出去。</span>'; $('why').textContent = ''; return; }
+    const col = r.c < 300 ? 'var(--green)' : r.c < 400 ? 'var(--blue)' : r.c < 500 ? 'var(--orange)' : 'var(--red)';
+    let t = `HTTP/1.1 <span style="color:${col}">${r.c} ${r.t}</span>`;
+    if (r.ct) t += `\nContent-Type: ${r.ct}`;
+    if (r.extra) t += `\n${r.extra}`;
+    if (r.b) t += `\n\n${esc(r.b)}`;
+    $('res').innerHTML = t; $('why').textContent = r.why;
+    $('res').parentElement.classList.remove('pop'); void $('res').offsetWidth; $('res').parentElement.classList.add('pop');
+  }
+  function load(e){
+    method = e.m; $('url').value = e.u; headers = e.h.map(x => [...x]); $('body').value = e.b;
+    renderHeaders(); build(); send();
+  }
+
+  document.querySelectorAll('.m').forEach(b => b.addEventListener('click', () => { method = b.dataset.m; build(); }));
+  $('url').addEventListener('input', build);
+  $('body').addEventListener('input', build);
+  $('hdrs').addEventListener('input', e => { const i = e.target.dataset.i; if (i == null) return; headers[i][+e.target.dataset.k] = e.target.value; build(); });
+  $('hdrs').addEventListener('click', e => { const d = e.target.dataset.del; if (d == null) return; headers.splice(+d, 1); renderHeaders(); build(); });
+  $('hchips').addEventListener('click', e => { const c = e.target.closest('.chip'); if (!c) return; headers.push([c.dataset.ck, c.dataset.cv]); renderHeaders(); build(); });
+  $('addH').addEventListener('click', () => { headers.push(['', '']); renderHeaders(); build(); const ins = $('hdrs').querySelectorAll('input'); ins[ins.length - 2]?.focus(); });
+  $('ex').innerHTML = EX.map((e, i) => `<button class="chip" type="button" id="ex-${i}" data-i="${i}">${e.n}</button>`).join('');
+  $('ex').addEventListener('click', e => { const c = e.target.closest('.chip'); if (c) load(EX[c.dataset.i]); });
+  $('send').addEventListener('click', send);
+  load(EX[2]);
+})();
+</script>
+
+</body>
+</html>
