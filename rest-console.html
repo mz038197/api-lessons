@@ -1,0 +1,451 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>REST 操作台</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;700&display=swap">
+<style>
+/* Layout: a fixed 1280×720 stage, scaled to fit any 16:9 frame; three columns read left→right as client → wire → server */
+:root{
+  --bg:#E9EDF2; --surface:#FFFFFF; --sunken:#F3F5F8; --ink:#14202C; --muted:#5A6776; --line:#D0D8E1;
+  --get:#2360C4; --post:#12835A; --put:#AD6B05; --delete:#C4352F;
+  --ok:#12835A; --warn:#AD6B05; --bad:#C4352F;
+  --j-key:#7338A8; --j-str:#12835A; --j-num:#AD6B05; --j-lit:#2360C4;
+  --sans:"IBM Plex Sans","Noto Sans TC",system-ui,-apple-system,"PingFang TC","Microsoft JhengHei",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,"Noto Sans TC",monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0F141A; --surface:#171E27; --sunken:#121820; --ink:#E4EAF1; --muted:#93A0AE; --line:#2A3440;
+  --get:#6D9BF0; --post:#4CC08E; --put:#E3A33E; --delete:#F0716B;
+  --ok:#4CC08E; --warn:#E3A33E; --bad:#F0716B;
+  --j-key:#C39BEF; --j-str:#4CC08E; --j-num:#E3A33E; --j-lit:#6D9BF0;
+  color-scheme:dark;
+}}
+:root[data-theme="dark"]{
+  --bg:#0F141A; --surface:#171E27; --sunken:#121820; --ink:#E4EAF1; --muted:#93A0AE; --line:#2A3440;
+  --get:#6D9BF0; --post:#4CC08E; --put:#E3A33E; --delete:#F0716B;
+  --ok:#4CC08E; --warn:#E3A33E; --bad:#F0716B;
+  --j-key:#C39BEF; --j-str:#4CC08E; --j-num:#E3A33E; --j-lit:#6D9BF0;
+  color-scheme:dark;
+}
+html,body{height:100%}
+body{box-sizing:border-box;background:var(--bg);color:var(--ink);font-family:var(--sans);overflow:hidden;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:12px}
+*,*::before,*::after{box-sizing:border-box}
+.viewport{position:relative;width:100%;height:100%;overflow:hidden}
+.stage{position:absolute;left:50%;top:50%;width:1280px;height:720px;transform:translate(-50%,-50%) scale(var(--s,1));
+  display:grid;grid-template-rows:auto 1fr;gap:14px;padding:4px;font-size:16px;line-height:1.45}
+.stage[data-method="GET"]{--m:var(--get)} .stage[data-method="POST"]{--m:var(--post)}
+.stage[data-method="PUT"]{--m:var(--put)} .stage[data-method="DELETE"]{--m:var(--delete)}
+
+/* header */
+.top{display:flex;align-items:flex-end;justify-content:space-between;gap:24px}
+.eyebrow{font-size:13px;letter-spacing:.08em;color:var(--muted);font-weight:500}
+h1{margin:2px 0 0;font-size:30px;line-height:1.15;font-weight:700;text-wrap:balance}
+.lead{margin:4px 0 0;color:var(--muted);font-size:15px}
+.tools{display:flex;gap:8px}
+.btn-ghost{font:500 14px var(--sans);color:var(--ink);background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:8px 14px;cursor:pointer}
+.btn-ghost:hover{border-color:var(--muted)}
+button:focus-visible,input:focus-visible,textarea:focus-visible{outline:2px solid var(--m,var(--get));outline-offset:2px}
+
+/* columns */
+.cols{display:grid;grid-template-columns:350px minmax(0,1fr) 360px;gap:14px;min-height:0}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px 16px;display:flex;flex-direction:column;gap:10px;min-height:0;min-width:0}
+.ph{display:flex;align-items:baseline;justify-content:space-between;gap:8px}
+.ph h2{margin:0;font-size:17px;font-weight:700}
+.ph h2 .step{font-family:var(--mono);color:var(--muted);font-weight:500;margin-right:6px}
+.ph .sub{font-size:13px;color:var(--muted)}
+.lbl{font-size:13px;font-weight:600;color:var(--muted);letter-spacing:.04em;display:flex;justify-content:space-between;align-items:center}
+
+/* method picker */
+.methods{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.mbtn{font:600 15px var(--mono);padding:9px 0;border-radius:7px;border:1.5px solid var(--line);background:var(--sunken);color:var(--muted);cursor:pointer}
+.mbtn[data-m="GET"]{--c:var(--get)} .mbtn[data-m="POST"]{--c:var(--post)} .mbtn[data-m="PUT"]{--c:var(--put)} .mbtn[data-m="DELETE"]{--c:var(--delete)}
+.mbtn:hover{color:var(--c)}
+.mbtn[aria-pressed="true"]{background:var(--c);border-color:var(--c);color:var(--surface)}
+
+.url{display:flex;align-items:center;border:1.5px solid var(--line);border-radius:8px;background:var(--sunken);font-family:var(--mono);font-size:15px;overflow:hidden}
+.url .host{padding:0 2px 0 10px;color:var(--muted);white-space:nowrap}
+.url input{flex:1;min-width:0;border:0;background:transparent;color:var(--ink);font:600 16px var(--mono);padding:10px 10px 10px 0}
+.url input:focus-visible{outline:none}
+.url:focus-within{border-color:var(--m)}
+
+textarea{flex:1;min-height:0;resize:none;border:1.5px solid var(--line);border-radius:8px;background:var(--sunken);color:var(--ink);font:14px/1.5 var(--mono);padding:8px 10px}
+textarea:disabled{color:var(--muted);opacity:.7}
+.jsonstate{font-weight:500;letter-spacing:0;font-size:12px}
+.jsonstate.ok{color:var(--ok)} .jsonstate.bad{color:var(--bad)}
+
+.say{border-left:3px solid var(--m);background:var(--sunken);border-radius:0 8px 8px 0;padding:8px 12px;font-size:15px;min-height:44px}
+.say small{display:block;font-size:12px;color:var(--muted);font-weight:600;letter-spacing:.04em}
+
+.send{font:700 17px var(--sans);color:#fff;background:var(--m);border:0;border-radius:8px;padding:11px;cursor:pointer;display:flex;justify-content:center;gap:10px;align-items:center}
+.send .k{font:500 12px var(--mono);opacity:.8}
+.send:disabled{opacity:.55;cursor:progress}
+
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font:500 13px var(--mono);border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:6px;padding:4px 8px;cursor:pointer;display:flex;gap:6px;align-items:center}
+.chip:hover{border-color:var(--muted)}
+.tag{font:700 11px var(--mono);letter-spacing:.02em}
+.tag.GET{color:var(--get)} .tag.POST{color:var(--post)} .tag.PUT{color:var(--put)} .tag.DELETE{color:var(--delete)}
+
+/* wire */
+.wire{display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:12px;padding:6px 2px 4px}
+.node{font-size:14px;font-weight:600;border:1.5px solid var(--line);border-radius:8px;padding:8px 12px;background:var(--sunken);text-align:center;transition:border-color .2s}
+.node small{display:block;font:500 11px var(--mono);color:var(--muted)}
+.node.hot{border-color:var(--m)}
+.track{position:relative;height:40px}
+.track::before{content:"";position:absolute;left:0;right:0;top:50%;border-top:2px dashed var(--line)}
+.packet{position:absolute;top:50%;left:0;transform:translate(-50%,-50%);font:700 13px var(--mono);padding:5px 10px;border-radius:999px;background:var(--pc,var(--m));color:#fff;white-space:nowrap;opacity:0}
+.dir{position:absolute;left:50%;top:-4px;transform:translateX(-50%);font-size:12px;color:var(--muted)}
+
+.msg{border:1px solid var(--line);border-radius:8px;background:var(--sunken);display:flex;flex-direction:column;min-height:0}
+.msg header{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 12px;border-bottom:1px solid var(--line);font-size:14px;font-weight:600}
+.msg header .hint{font-weight:400;color:var(--muted);font-size:12px}
+.msg pre{margin:0;padding:10px 12px;font:14px/1.55 var(--mono);white-space:pre-wrap;word-break:break-word;overflow:auto;min-height:0}
+.req{flex:0 0 auto}
+.req pre{max-height:180px}
+.res{flex:1}
+.res pre{flex:1}
+.status{font:700 13px var(--mono);padding:3px 9px;border-radius:999px;color:#fff;background:var(--muted)}
+.status.s2{background:var(--ok)} .status.s4{background:var(--bad)}
+.statmean{font-weight:500;font-size:13px;color:var(--muted);margin-left:8px}
+.hm{font-weight:700}
+.j-k{color:var(--j-key)} .j-s{color:var(--j-str)} .j-n{color:var(--j-num)} .j-l{color:var(--j-lit)}
+.dim{color:var(--muted)}
+.empty{color:var(--muted);font-family:var(--sans);font-size:14px}
+
+/* table */
+.tablewrap{flex:1;min-height:0;overflow:auto;border:1px solid var(--line);border-radius:8px}
+table{width:100%;border-collapse:collapse;font-size:15px;font-variant-numeric:tabular-nums}
+th{position:sticky;top:0;background:var(--sunken);text-align:left;font:600 12px var(--mono);color:var(--muted);padding:7px 10px;border-bottom:1px solid var(--line)}
+td{padding:8px 10px;border-bottom:1px solid var(--line)}
+tr:last-child td{border-bottom:0}
+td.u{font:500 13px var(--mono);color:var(--muted)}
+td .null{font:italic 13px var(--mono);color:var(--muted)}
+tr{transition:background-color .6s, opacity .5s}
+tr.f-read{background:color-mix(in srgb,var(--get) 16%,transparent)}
+tr.f-new{background:color-mix(in srgb,var(--post) 18%,transparent)}
+tr.f-upd{background:color-mix(in srgb,var(--put) 20%,transparent)}
+tr.f-del{background:color-mix(in srgb,var(--delete) 18%,transparent);opacity:.35;text-decoration:line-through}
+.tip{font-size:13px;color:var(--muted);line-height:1.5}
+.tip b{color:var(--ink);font-weight:600}
+@media (prefers-reduced-motion: reduce){tr{transition:none}}
+</style>
+</head>
+<body>
+
+
+<div class="viewport" id="vp">
+<div class="stage" id="stage" data-method="GET">
+  <div class="top">
+    <div>
+      <div class="eyebrow">API 怎麼溝通 · 互動練習</div>
+      <h1>REST 操作台</h1>
+      <p class="lead">選一個 HTTP 方法、輸入網址，送出後看看訊息怎麼來回，伺服器上的資料又怎麼變。</p>
+    </div>
+    <div class="tools">
+      <button class="btn-ghost" id="reset" type="button">重設資料</button>
+      <button class="btn-ghost" id="fs" type="button">全螢幕</button>
+    </div>
+  </div>
+
+  <div class="cols">
+    <!-- client -->
+    <section class="panel" aria-label="用戶端">
+      <div class="ph"><h2><span class="step">1</span>用戶端 Client</h2><span class="sub">你要送出的請求</span></div>
+      <div class="lbl">HTTP 方法（動作）</div>
+      <div class="methods" role="group" aria-label="HTTP 方法">
+        <button class="mbtn" data-m="GET" type="button" id="m-get">GET</button>
+        <button class="mbtn" data-m="POST" type="button" id="m-post">POST</button>
+        <button class="mbtn" data-m="PUT" type="button" id="m-put">PUT</button>
+        <button class="mbtn" data-m="DELETE" type="button" id="m-delete">DELETE</button>
+      </div>
+      <div class="lbl">網址（資源）</div>
+      <label class="url"><span class="host">api.school.tw</span><input id="path" value="/students/1" spellcheck="false" autocomplete="off" aria-label="資源路徑"></label>
+      <div class="lbl"><span>Body（JSON）</span><span class="jsonstate" id="jstate"></span></div>
+      <textarea id="body" spellcheck="false" aria-label="請求 Body"></textarea>
+      <div class="say"><small>白話翻譯</small><span id="say"></span></div>
+      <button class="send" id="send" type="button">送出請求 <span class="k">Enter</span></button>
+      <div class="lbl">快速範例（先猜結果，再送出）</div>
+      <div class="chips" id="chips"></div>
+    </section>
+
+    <!-- wire -->
+    <section class="panel" aria-label="網路上的訊息">
+      <div class="ph"><h2><span class="step">2</span>網路上傳遞的訊息</h2><span class="sub">HTTP 請求出去、回應回來</span></div>
+      <div class="wire">
+        <div class="node" id="nc">用戶端<small>你的 App</small></div>
+        <div class="track" id="track"><span class="dir" id="dir"></span><span class="packet" id="packet"></span></div>
+        <div class="node" id="ns">伺服器<small>api.school.tw</small></div>
+      </div>
+      <div class="msg req">
+        <header><span>請求 Request</span><span class="hint">方法 + 網址 + 標頭 + Body</span></header>
+        <pre id="reqpre"></pre>
+      </div>
+      <div class="msg res">
+        <header><span>回應 Response</span><span id="stat"></span></header>
+        <pre id="respre"><span class="empty">送出請求後，伺服器的回應會出現在這裡。</span></pre>
+      </div>
+    </section>
+
+    <!-- server -->
+    <section class="panel" aria-label="伺服器資料">
+      <div class="ph"><h2><span class="step">3</span>伺服器資料</h2><span class="sub" id="count"></span></div>
+      <div class="tablewrap">
+        <table>
+          <thead><tr><th>資源網址</th><th>name</th><th>grade</th><th>class</th></tr></thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+      <div class="tip"><b>每一列都是一個資源</b>，都有自己的網址。<br>試試看：用 PUT 時故意少寫一個欄位，看看「整筆替換」是什麼意思。</div>
+    </section>
+  </div>
+</div>
+</div>
+
+<script>
+(() => {
+  const $ = id => document.getElementById(id);
+  const stage = $('stage'), vp = $('vp');
+  const seed = () => [
+    {id:1,name:'小明',grade:2,class:'A'},
+    {id:2,name:'小美',grade:2,class:'B'},
+    {id:3,name:'阿凱',grade:1,class:'A'},
+    {id:4,name:'怡君',grade:3,class:'C'}
+  ];
+  let db = seed(), nextId = 5, method = 'GET', busy = false;
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let DUR = reduce ? 0 : 650;
+
+  const PRESET = {
+    POST: '{\n  "name": "小華",\n  "grade": 1,\n  "class": "B"\n}',
+    PUT:  '{\n  "name": "小美",\n  "grade": 3,\n  "class": "A"\n}'
+  };
+  const STATUS = {
+    200:['OK','成功'], 201:['Created','已建立新資源'], 400:['Bad Request','請求內容有誤'],
+    404:['Not Found','找不到這個資源'], 405:['Method Not Allowed','這個網址不接受這個方法']
+  };
+  const EXAMPLES = [
+    ['GET','/students'], ['GET','/students/1'], ['POST','/students'],
+    ['PUT','/students/2'], ['DELETE','/students/3'], ['GET','/students/99']
+  ];
+
+  /* ---------- fit 1280×720 stage into any frame ---------- */
+  function fit(){
+    const s = Math.min(vp.clientWidth / 1280, vp.clientHeight / 720);
+    stage.style.setProperty('--s', s > 0 ? s : 1);
+  }
+  new ResizeObserver(fit).observe(vp); addEventListener('resize', fit); fit();
+
+  /* ---------- helpers ---------- */
+  const esc = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  function hl(obj){
+    return esc(JSON.stringify(obj, null, 2)).replace(
+      /("(\\u[a-fA-F0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d+)?(?:[eE][+\-]?\d+)?)/g,
+      m => {
+        let c = 'j-n';
+        if (/^"/.test(m)) c = /:$/.test(m) ? 'j-k' : 'j-s';
+        else if (/true|false|null/.test(m)) c = 'j-l';
+        return `<span class="${c}">${m}</span>`;
+      });
+  }
+  function parsePath(raw){
+    let p = raw.trim().replace(/^https?:\/\/[^/]+/i, '');
+    if (!p.startsWith('/')) p = '/' + p;
+    p = p.replace(/\/+$/, '') || '/';
+    const m = p.match(/^\/students(?:\/(\d+))?$/);
+    return { path:p, ok:!!m, id: m && m[1] ? Number(m[1]) : null };
+  }
+  const hasBody = m => m === 'POST' || m === 'PUT';
+  function parseBody(){
+    try { return { ok:true, val: JSON.parse($('body').value) }; }
+    catch(e){ return { ok:false, err: e.message }; }
+  }
+
+  /* ---------- plain-language translation ---------- */
+  function translate(){
+    const r = parsePath($('path').value);
+    if (!r.ok) return `伺服器上沒有「${esc(r.path)}」這種資源，很可能會回 404。`;
+    const id = r.id;
+    switch (method){
+      case 'GET':    return id == null ? '讀取<b>全部</b>學生的資料。只讀，不修改。' : `讀取 ID 為 <b>${id}</b> 的學生。只讀，不修改。`;
+      case 'POST':   return id == null ? '<b>新增</b>一位學生，資料放在 Body 裡。' : 'POST 是對「整個集合」新增，網址通常不會指定 ID。';
+      case 'PUT':    return id == null ? 'PUT 要指定替換哪一筆，例如 /students/2。' : `用 Body 的內容，<b>整筆替換</b> ID 為 ${id} 的學生。`;
+      case 'DELETE': return id == null ? '這等於要刪掉<b>全部</b>學生，這個伺服器不允許。' : `<b>刪除</b> ID 為 ${id} 的學生。`;
+    }
+  }
+  function refreshUI(){
+    $('say').innerHTML = translate();
+    const ta = $('body'), js = $('jstate');
+    if (!hasBody(method)){ js.textContent = ''; js.className = 'jsonstate'; return; }
+    const b = parseBody();
+    js.textContent = b.ok ? 'JSON 格式正確' : 'JSON 格式有誤';
+    js.className = 'jsonstate ' + (b.ok ? 'ok' : 'bad');
+  }
+
+  function setMethod(m){
+    method = m;
+    stage.dataset.method = m;
+    document.querySelectorAll('.mbtn').forEach(b => b.setAttribute('aria-pressed', b.dataset.m === m));
+    const ta = $('body');
+    if (hasBody(m)){
+      ta.disabled = false;
+      ta.placeholder = '';
+      const v = ta.value.trim();
+      if (!v || v === PRESET.POST.trim() || v === PRESET.PUT.trim()) ta.value = PRESET[m];
+    } else {
+      ta.disabled = true;
+      ta.value = '';
+      ta.placeholder = `${m} 不需要 Body，\n要什麼資源，看網址就知道。`;
+    }
+    refreshUI();
+  }
+
+  /* ---------- the fake server ---------- */
+  const pick = o => ({ name: o.name ?? null, grade: o.grade ?? null, class: o.class ?? null });
+  function server(m, r){
+    if (!r.ok) return { status:404, body:{ error:`找不到資源 ${r.path}` } };
+    const idx = r.id == null ? -1 : db.findIndex(s => s.id === r.id);
+    const notFound = { status:404, body:{ error:`找不到 ID 為 ${r.id} 的學生` } };
+    if (m === 'GET'){
+      if (r.id == null) return { status:200, body: db.map(s => ({...s})), fx:{ type:'read', ids: db.map(s => s.id) } };
+      if (idx < 0) return notFound;
+      return { status:200, body:{...db[idx]}, fx:{ type:'read', ids:[r.id] } };
+    }
+    if (m === 'POST'){
+      if (r.id != null) return { status:405, body:{ error:'POST 請對 /students 送出，不要指定 ID' } };
+      const b = parseBody();
+      if (!b.ok) return { status:400, body:{ error:'Body 不是合法的 JSON', detail:b.err } };
+      if (!b.val || typeof b.val !== 'object' || Array.isArray(b.val)) return { status:400, body:{ error:'Body 必須是一個物件 { }' } };
+      if (!b.val.name) return { status:400, body:{ error:'缺少必要欄位 name' } };
+      const rec = { id: nextId++, ...pick(b.val) };
+      db.push(rec);
+      return { status:201, body:{...rec}, fx:{ type:'new', ids:[rec.id] } };
+    }
+    if (m === 'PUT'){
+      if (r.id == null) return { status:405, body:{ error:'PUT 要指定 ID，例如 /students/2' } };
+      if (idx < 0) return notFound;
+      const b = parseBody();
+      if (!b.ok) return { status:400, body:{ error:'Body 不是合法的 JSON', detail:b.err } };
+      if (!b.val || typeof b.val !== 'object' || Array.isArray(b.val)) return { status:400, body:{ error:'Body 必須是一個物件 { }' } };
+      const rec = { id: r.id, ...pick(b.val) };
+      db[idx] = rec;
+      return { status:200, body:{...rec}, fx:{ type:'upd', ids:[r.id] } };
+    }
+    if (m === 'DELETE'){
+      if (r.id == null) return { status:405, body:{ error:'不允許一次刪除全部學生' } };
+      if (idx < 0) return notFound;
+      db.splice(idx, 1);
+      return { status:200, body:{ message:'已刪除', id:r.id }, fx:{ type:'del', ids:[r.id] } };
+    }
+  }
+
+  /* ---------- rendering ---------- */
+  const cell = v => v === null || v === undefined ? '<span class="null">null</span>' : esc(v);
+  function renderTable(flash){
+    $('tbody').innerHTML = db.map(s =>
+      `<tr data-id="${s.id}"><td class="u">/students/${s.id}</td><td>${cell(s.name)}</td><td>${cell(s.grade)}</td><td>${cell(s.class)}</td></tr>`
+    ).join('') || '<tr><td colspan="4" class="u">沒有任何學生資料，按「重設資料」重來。</td></tr>';
+    $('count').textContent = `/students · ${db.length} 筆`;
+    if (flash) markRows(flash.type, flash.ids);
+  }
+  function markRows(type, ids){
+    ids.forEach(id => {
+      const tr = document.querySelector(`#tbody tr[data-id="${id}"]`);
+      if (!tr) return;
+      tr.classList.add('f-' + type);
+      if (type !== 'del') setTimeout(() => tr.classList.remove('f-' + type), 1800);
+    });
+  }
+  function reqText(m, r){
+    let t = `<span class="hm tag ${m}">${m}</span> ${esc(r.path)} <span class="dim">HTTP/1.1</span>\n<span class="dim">Host:</span> api.school.tw\n<span class="dim">Accept:</span> application/json`;
+    if (hasBody(m)){
+      const b = parseBody();
+      t += `\n<span class="dim">Content-Type:</span> application/json\n\n` + (b.ok ? hl(b.val) : esc($('body').value));
+    }
+    return t;
+  }
+  function renderResponse(res){
+    const [en, zh] = STATUS[res.status];
+    const cls = res.status < 300 ? 's2' : 's4';
+    $('stat').innerHTML = `<span class="status ${cls}">${res.status} ${en}</span><span class="statmean">${zh}</span>`;
+    $('respre').innerHTML = `<span class="dim">HTTP/1.1 ${res.status} ${en}\nContent-Type: application/json</span>\n\n` + hl(res.body);
+  }
+
+  /* ---------- packet animation ---------- */
+  function fly(toServer, label, color){
+    const p = $('packet');
+    p.textContent = label;
+    p.style.setProperty('--pc', color);
+    $('dir').textContent = toServer ? '請求 →' : '← 回應';
+    $('nc').classList.toggle('hot', toServer);
+    $('ns').classList.toggle('hot', !toServer);
+    if (!DUR){ p.style.opacity = 0; return Promise.resolve(); }
+    const from = toServer ? '0%' : '100%', to = toServer ? '100%' : '0%';
+    return p.animate(
+      [{ left:from, opacity:0 }, { opacity:1, offset:.12 }, { opacity:1, offset:.88 }, { left:to, opacity:0 }],
+      { duration: DUR, easing:'cubic-bezier(.45,0,.35,1)', fill:'forwards' }
+    ).finished;
+  }
+
+  async function send(){
+    if (busy) return;
+    busy = true; $('send').disabled = true;
+    const m = method, r = parsePath($('path').value);
+    $('reqpre').innerHTML = reqText(m, r);
+    $('stat').innerHTML = '<span class="statmean">等待伺服器回應…</span>';
+    $('respre').innerHTML = '<span class="empty">請求傳送中…</span>';
+    await fly(true, `${m} ${r.path}`, `var(--${m.toLowerCase()})`);
+    const res = server(m, r);
+    if (res.fx && res.fx.type === 'del') markRows('del', res.fx.ids);
+    else renderTable(res.fx);
+    const sc = res.status < 300 ? 'var(--ok)' : 'var(--bad)';
+    await fly(false, `${res.status} ${STATUS[res.status][0]}`, sc);
+    renderResponse(res);
+    if (res.fx && res.fx.type === 'del') setTimeout(() => renderTable(), DUR ? 700 : 0);
+    $('nc').classList.remove('hot'); $('ns').classList.remove('hot'); $('dir').textContent = '';
+    busy = false; $('send').disabled = false;
+  }
+
+  /* ---------- wiring ---------- */
+  document.querySelectorAll('.mbtn').forEach(b => b.addEventListener('click', () => setMethod(b.dataset.m)));
+  $('path').addEventListener('input', refreshUI);
+  $('path').addEventListener('keydown', e => { if (e.key === 'Enter'){ e.preventDefault(); send(); } });
+  $('body').addEventListener('input', refreshUI);
+  $('body').addEventListener('keydown', e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)){ e.preventDefault(); send(); } });
+  $('send').addEventListener('click', send);
+  $('chips').innerHTML = EXAMPLES.map(([m, p], i) =>
+    `<button class="chip" type="button" id="ex-${i}" data-i="${i}"><span class="tag ${m}">${m}</span>${p}</button>`).join('');
+  $('chips').addEventListener('click', e => {
+    const b = e.target.closest('.chip'); if (!b) return;
+    const [m, p] = EXAMPLES[b.dataset.i];
+    $('path').value = p; setMethod(m); $('send').focus();
+  });
+  $('reset').addEventListener('click', () => {
+    if (busy) return;
+    db = seed(); nextId = 5; renderTable();
+    $('reqpre').innerHTML = ''; $('stat').innerHTML = '';
+    $('respre').innerHTML = '<span class="empty">資料已重設成 4 位學生。</span>';
+  });
+  const fsBtn = $('fs');
+  fsBtn.addEventListener('click', async () => {
+    try {
+      if (document.fullscreenElement) await document.exitFullscreen();
+      else await document.documentElement.requestFullscreen();
+    } catch (e) { fsBtn.textContent = '無法全螢幕'; setTimeout(() => fsBtn.textContent = '全螢幕', 1600); }
+  });
+  document.addEventListener('fullscreenchange', () => { fsBtn.textContent = document.fullscreenElement ? '結束全螢幕' : '全螢幕'; fit(); });
+
+  /* ---------- start in a working state: one finished GET ---------- */
+  setMethod('GET'); renderTable();
+  const keep = DUR; DUR = 0;
+  send().then(() => { DUR = keep; });
+})();
+</script>
+
+</body>
+</html>
